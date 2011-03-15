@@ -3,7 +3,8 @@
 import sys
 import email
 import cass
-#
+from email.iterators import _structure
+
 
 def rawHeader(key, msg):
 
@@ -11,10 +12,10 @@ def rawHeader(key, msg):
     while True:
         line = msg.readline()
       
-    header.append(line)
+        header.append(line)
       
-    if line == '\n':
-        break
+        if line == '\n':
+            break
  
     cass.insert(key, ''.join(header), 'Header')
 
@@ -24,7 +25,7 @@ def rawEnvelope(key, envelope):
     line = envelope.readline()
     
     cass.insert(key, line, 'Envelope')
-    m
+
 #
 def rawEmail(emailFile):
   
@@ -39,9 +40,29 @@ def rawEmail(emailFile):
     email.close()
     envelope.close()
 #
-def parseEmail(msg):
+
+def email_structure(msg, boundary, boundaries):
     
-    print 'a'
+    if msg.is_multipart():
+        
+        if  (msg.get_content_maintype() == 'multipart'):
+            boundary = msg.get_boundary()
+
+        for subpart in msg.get_payload():
+            
+            email_structure(subpart, boundary, boundaries)
+
+    if (msg.get_content_type() != 'text/plain' and msg.get_content_type() != 'text/html' and
+            msg.get_content_maintype() != 'multipart'):
+        print boundary
+        print msg.get_filename()
+        
+    
+    
+def parseEmail(msg):
+    print 'b'
+    
+    
   
 #
 def mimeEmail(emailFile):  
@@ -51,13 +72,20 @@ def mimeEmail(emailFile):
 
 
 ###
-
 emailFile = sys.argv[1]
 
 f = open(emailFile, 'r')
 msg = email.message_from_file(f)
 f.close()
 
+boundaries = []
+email_structure(msg, 0, boundaries)
+
+
+
+
+
+"""
 #try:  
 if msg.is_multipart():
     parseEmail(msg)
@@ -69,4 +97,4 @@ else:
 #   except NoBoundaryInMultipartDefect:
 #       rawEmail(emailFile)
         
-
+"""
