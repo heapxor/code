@@ -24,7 +24,7 @@ def rawEnvelope(key, envelope):
     line = envelope.readline()
     
     cass.insert(key, line, 'Envelope')
-    
+    m
 #
 def rawEmail(emailFile):
   
