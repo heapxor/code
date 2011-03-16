@@ -6,7 +6,7 @@ import cass
 import hashlib
 import StringIO
 from email.errors import NoBoundaryInMultipartDefect
-
+from email.Iterators import _structure
 
 def rawHeader(key, msg):
 
@@ -20,6 +20,7 @@ def rawHeader(key, msg):
         if line == '\n':
             break
  
+    #print ''.join(header)
     #cass.writeHeader(key, ''.join(header))    
 #
 def rawBody(key, email):
@@ -44,8 +45,7 @@ def rawEnvelope(key, envelope):
     #cass.writeEnevelope(key, line)
 
 #
-def writeAttachments(msg, boundary, boundaries):
-    
+def writeAttachments(msg, boundary, boundaries):    
     if msg.is_multipart():        
         if  (msg.get_content_maintype() == 'multipart'):
             boundary = msg.get_boundary()
@@ -63,104 +63,78 @@ def writeAttachments(msg, boundary, boundaries):
         #cass.writeAttachment(mHash, msg.get_payload()))
         
 #    
-def rawEmail(key, email):
-  
+def rawEmail(key, email):  
     rawHeader(key, email)
     rawBody(key, email)
 
 #    
-def newRawBody(key, f, attachments):
-    attchHeader = []
+def newRawBody(key, f, attachments):    
+    body = []
+    stat = 3;
+    i = 0
     
-    while True:
-        
-        line = f.readline() 
-        attchHeader.append(line)
-        
-        if line == '\n':
+    while True:        
+        if stat == 1: #attachment header
+            while True:
+                line = f.readline()                
+                body.append(line)                
+                if line == '\n':
+                    body.append('MARK:' + attachments[i][2] + '\n')                    
+                    stat = 2
+                    break
+                    
+        elif stat == 2: 
+            while True: 
+                line = f.readline()                
+                if  attachments[i][3] + '--' in line:
+                    body.append(line)                   
+                    stat = 3                    
+                    i = i + 1    
+                                    
+                    if i == len(attachments):
+                        stat = 4 
+                    break
+                
+        elif stat == 3: 
+            while True:
+                line = f.readline()             
+                body.append(line)
+             
+                if attachments[i][0] in line:                                
+                    stat = 1
+                    break
+                
+        elif stat == 4:
             break
-        
-    #zapis attachment
+                
+    #print ''.join(body)    
 
     #attchHeader.append(attchHash)
     
-    #cass.write(key, body, attachments)
-
+    #cass.write(key, body, attachments)       
 #
-"""
-def writeAttachments(key, msg, attachments):
-    #write attachments - mozem to robit uz v get_attach_info
-    for part in msg.walk():
-        # multipart/* are just containers
-        if part.get_content_maintype() == 'multipart':
-            continue
-        
-        filename = part.get_filename()
-        if filename:
-                    
-            part.get_payload(decode=True)
-"""            
-#
-def mimeEmail(key, f, msg):  
-
+def mimeEmail(key, f, msg):
     rawHeader(key, f)
 
-    #find attachment's boundary
+    #find attachment's boundary and write attachments
     attachments = []
     writeAttachments(msg, 0, attachments)
     
     if len(attachments) != 0:
-        newRawBody(key, f, attachments)                
-        #writeAttachments(key, msg, attachments)
+        newRawBody(key, f, attachments)
     else:
-        rawBody(key, f)
-    
-#    
-"""
-    if len(attachments) != 0:    
-    
-        body = []
-    
-        for i in attachments:
-        
-            boundary = i[2]
-        
-            while True:
-                line = email.readline()
-            
-                if line != boundary:
-                    body.append(line)
-                else:
-                    attHeader = writeAttachment(email, i)
-                    body.append(attHeader)
-                    
-    else:
-        rawBody(key, email)
-"""   
+        rawBody(key, f)    
+#
 ##############################################################################
 emailFile = sys.argv[1]
 
 f = open(emailFile, 'r')
 msg = email.message_from_file(f)
-
 f.seek(0)
-
-"""
 envelope = open(emailFile + '.envelope', 'r')
 rawEnvelope(emailFile, envelope)
 envelope.close()
-"""
 
-#output = StringIO.StringIO()
-#output.write(msg.get_payload(0))
-#output.seek(0,0)
-
-
-mimeEmail(emailFile, f, msg)
-
-
-
-"""
 
 try:  
     if msg.is_multipart():
@@ -171,5 +145,5 @@ try:
 except NoBoundaryInMultipartDefect:
     rawEmail(emailFile, f)
         
+        
 f.close()
-"""
