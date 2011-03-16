@@ -30,30 +30,58 @@ server_list=['cvut9:9160'], prefill=False)
 
 messagesMetaData = pycassa.ColumnFamily(pool, 'messagesMetaData',
 write_consistency_level=ConsistencyLevel.QUORUM)
+
 messagesContext = pycassa.ColumnFamily(pool, 'messagesContext',
 write_consistency_level=ConsistencyLevel.QUORUM)
+
 messagesAttachment = pycassa.ColumnFamily(pool, 'messagesAttachment',
 write_consistency_level=ConsistencyLevel.QUORUM)
+
 userInbox = pycassa.ColumnFamily(pool, 'userInbox',
 write_consistency_level=ConsistencyLevel.QUORUM)
 
 
 # INSERTING APIs
 
-def insert(key, data, columnName):
+def writeHeader(key, data):
     """
     Save raw header
     """
-    messagesMetaData.insert(key, {columnName: data})
+    messagesMetaData.insert(key, {'Header': data})
 
-
-def save_body(body):
-    messagesContext.insert('1', {'test': body})
+def writeBody(key, data):
+    """
+    Save raw body
+    ??? ale ak je >1MB do bulk write
+    """
+    messagesContext.insert(key, {'Body': data})
     
-def save_attachment(att):
-    messagesAttachment.insert('1', {'test': 'body'})
+def writeEnevelope(key, data):
+    """
+    Save envelope
+    """
+    messagesMetaData.insert(key, {'Envelope': data})
     
+def writeMetaAttachment(key, data):
+    """
+    Save attachment's metadata
+    data: list of att's details
+    """
+    #messagesMetaData.insert(key, {'Attachments': data})
 
-def get_header(key):
+def writeDataAttachment(key, data):
+    """
+    key: attachment hash
+    data: attachment data
+    """
+    messagesAttachment.insert(key, {'1': data})
+
+
+
+
+
+
+
+def getHeader(key):
     header = messagesMetaData.get(key, columns=['Header'])
     return header['Header']
