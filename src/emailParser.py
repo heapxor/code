@@ -2,12 +2,13 @@
 
 import sys
 import email
-import cass
+#import cass
 import hashlib
 import StringIO
 from email.errors import NoBoundaryInMultipartDefect
 from email.Iterators import _structure
 from email.utils import parseaddr
+from email.utils import getaddresses
 
 ###############################################################################
 def rawHeader(key, msg):
@@ -22,7 +23,8 @@ def rawHeader(key, msg):
             break
  
     #print ''.join(header)
-    cass.writeHeader(key, ''.join(header))    
+    #cass.writeHeader(key, ''.join(header))
+    return ''.join(header)    
 #
 def rawBody(key, email):    
     body = []
@@ -35,18 +37,23 @@ def rawBody(key, email):
         if len(line) == 0:
             break #EOF
             
-    cass.writeBody(key, ''.join(body))    
-#
-def rawEnvelope(key, envelope):
-    
-    line = envelope.readline()
-    
-    cass.writeEnevelope(key, line)
+    # cass.writeBody(key, ''.join(body))
+    return ''.join(body)    
 #    
-def rawEmail(key, email):  
-    rawHeader(key, email)
-    rawBody(key, email)
-#
+def getMetaData(msg):    
+    #the real recipient is in the email header, because of tapping
+    #X-VF-Scanner-Rcpt-To: x@y
+    #TODO:??? normally its in envelope
+    uid = msg.get('X-VF-Scanner-Rcpt-To')
+    #TODO:??? whats the domain format, fix at the fulltext? 
+    domain = uid.partition('@')[2]
+    
+    eFrom = msg.get('From')
+    date = msg.get('Date')
+    subject = msg.get('Subject')
+    
+    return (uid, domain, eFrom, date, subject)
+#    
 def writeAttachments(msg, boundary, boundaries):    
     if msg.is_multipart():        
         if  (msg.get_content_maintype() == 'multipart'):
@@ -114,7 +121,11 @@ def newRawBody(key, f, attachments):
     cass.writeBody(key, ''.join(body))       
 #
 def mimeEmail(key, f, msg):
-    rawHeader(key, f)
+       
+    header = rawHeader(key, f)
+    body = rawBody(key, f)
+    metaData = getMetaData(msg)  
+    
 
     #find attachment's boundary and write attachments
     attachments = []
@@ -133,6 +144,13 @@ def mimeEmail(key, f, msg):
     else:
         rawBody(key, f)    
 #
+def rawEmail(key, f, msg):
+    
+    header = rawHeader(key, f)
+    body = rawBody(key, f)
+    metaData = getMetaData(msg)        
+    
+    #cass.writeEmail(key, envelope, header, body, metaData)
 ##############################################################################
 emailFile = sys.argv[1]
 
@@ -140,19 +158,20 @@ f = open(emailFile, 'r')
 msg = email.message_from_file(f)
 f.seek(0) 
 
-envelope = open(emailFile + '.envelope', 'r')
-line = envelope.readline()
-#rawEnvelope(emailFile, envelope)
-envelope.close()
+env = open(emailFile + '.envelope', 'r')
+envelope = env.readline()
+env.close()
 
-
+mimeEmail(emailFile, f, msg)
+#??? whats the key?
+"""
 try:  
     if msg.is_multipart():
         mimeEmail(emailFile, f, msg)
     else:
-        rawEmail(emailFile, f)
+        rawEmail(emailFile, f, msg)
         
 except NoBoundaryInMultipartDefect:
-    rawEmail(emailFile, f)
-        
+    rawEmail(emailFile, f, msg)
+"""     
 f.close()
