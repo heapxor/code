@@ -11,14 +11,21 @@ replication_factor = 1;
 use emailArchive;
 
 create column family messagesMetaData with memtable_throughput=64;
-create column family messagesContext with memtable_throughput=64;
+create column family messagesContent with memtable_throughput=64;
 create column family messagesAttachment with memtable_throughput=64;
-create column family userInbox with memtable_throughput=64;
+create column family lastInbox with comparator=TimeUUIDType and memtable_throughput=64;
 
+update column family  messagesMetaData with column_metadata=[{column_name: uid, index_type: KEYS, index_name: uidIdx, validation_class: UTF8Type},
+ {column_name: domain, index_type: KEYS, index_name: domainIdx, validation_class: UTF8Type}];
 """
+
+
+import datetime
+from datetime import datetime
 
 import pycassa
 from pycassa.cassandra.ttypes import ConsistencyLevel
+
 
 __all__ = ['save_header']
 
@@ -31,14 +38,15 @@ server_list=['cvut9:9160'], prefill=False)
 messagesMetaData = pycassa.ColumnFamily(pool, 'messagesMetaData',
 write_consistency_level=ConsistencyLevel.QUORUM)
 
-messagesContext = pycassa.ColumnFamily(pool, 'messagesContext',
+messagesContent = pycassa.ColumnFamily(pool, 'messagesContent',
 write_consistency_level=ConsistencyLevel.QUORUM)
 
 messagesAttachment = pycassa.ColumnFamily(pool, 'messagesAttachment',
 write_consistency_level=ConsistencyLevel.QUORUM)
 
-userInbox = pycassa.ColumnFamily(pool, 'userInbox',
+lastInbox = pycassa.ColumnFamily(pool, 'lastInbox',
 write_consistency_level=ConsistencyLevel.QUORUM)
+
 
 
 # INSERTING APIs
@@ -48,13 +56,18 @@ def writeHeader(key, data):
     Save raw header
     """
     messagesMetaData.insert(key, {'Header': data})
+    
+def writeUid(key, uid, domain):    
+    
+    messagesMetaData.insert(key, {'uid': uid, 'domain': domain})
+    
 
 def writeBody(key, data):
     """
     Save raw body
     ??? ale ak je >1MB do bulk write
     """
-    messagesContext.insert(key, {'Body': data})
+    messagesContent.insert(key, {'Body': data})
     
 def writeEnevelope(key, data):
     """
@@ -78,10 +91,14 @@ def writeDataAttachment(key, data):
 
 
 
-
-
-
+def writeInboxLast(uid, messageId):
+    
+    time = datetime.utcnow()
+    
+    lastInbox.insert(uid, {time: messageId})
+    
 
 def getHeader(key):
     header = messagesMetaData.get(key, columns=['Header'])
     return header['Header']
+

@@ -7,6 +7,8 @@ import hashlib
 import StringIO
 from email.errors import NoBoundaryInMultipartDefect
 from email.Iterators import _structure
+from email.utils import parseaddr
+
 ###############################################################################
 def rawHeader(key, msg):
     header = []
@@ -118,6 +120,13 @@ def mimeEmail(key, f, msg):
     attachments = []
     writeAttachments(msg, 0, attachments)
     
+    uid = parseaddr(msg.get('To'))[1]
+    domain = uid.partition('@')[2]
+    
+    cass.writeUid(key, uid, domain)
+    cass.writeInboxLast(uid, key)
+    
+    
     if len(attachments) != 0:
         cass.writeMetaAttachment(key, attachments)
         newRawBody(key, f, attachments)
@@ -132,7 +141,8 @@ msg = email.message_from_file(f)
 f.seek(0) 
 
 envelope = open(emailFile + '.envelope', 'r')
-rawEnvelope(emailFile, envelope)
+line = envelope.readline()
+#rawEnvelope(emailFile, envelope)
 envelope.close()
 
 
@@ -144,6 +154,5 @@ try:
         
 except NoBoundaryInMultipartDefect:
     rawEmail(emailFile, f)
-        
         
 f.close()
