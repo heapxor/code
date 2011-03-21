@@ -7,6 +7,8 @@ import os
 import hashlib
 #import StringIO
 from email.errors import NoBoundaryInMultipartDefect
+from celery.task import task
+
 #from email.Iterators import _structure
 #from email.utils import parseaddr
 #from email.utils import getaddresses
@@ -150,26 +152,29 @@ emailFile = sys.argv[1]
 
 #??? whats the key?
 
-f = open(emailFile, 'r')
-msg = email.message_from_file(f)
-f.seek(0)
+@task
+def emailParser(emailFile):
+    
+    f = open(emailFile, 'r')
+    msg = email.message_from_file(f)
+    f.seek(0)
 
-env = open(emailFile + '.envelope', 'r')
-envelope = env.readline()
-env.close()
+    env = open(emailFile + '.envelope', 'r')
+    envelope = env.readline()
+    env.close()
 
-size = os.path.getsize(emailFile) 
+    size = os.path.getsize(emailFile) 
 
-try:  
-    if msg.is_multipart():
-        mimeEmail(emailFile, f, msg)
-    else:
-        rawEmail(emailFile, f, msg)
+    try:  
+        if msg.is_multipart():
+            mimeEmail(emailFile, f, msg)
+        else:
+            rawEmail(emailFile, f, msg)
         
-except NoBoundaryInMultipartDefect:
-    rawEmail(emailFile, f, msg)
+    except NoBoundaryInMultipartDefect:
+        rawEmail(emailFile, f, msg)
      
-f.close()
+    f.close()
 
 
 #print cass.getHeader(emailFile)
