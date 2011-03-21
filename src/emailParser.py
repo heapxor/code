@@ -2,13 +2,14 @@
 
 import sys
 import email
-#import cass
+import cass
+import os
 import hashlib
-import StringIO
+#import StringIO
 from email.errors import NoBoundaryInMultipartDefect
-from email.Iterators import _structure
-from email.utils import parseaddr
-from email.utils import getaddresses
+#from email.Iterators import _structure
+#from email.utils import parseaddr
+#from email.utils import getaddresses
 
 ###############################################################################
 def rawHeader(key, msg):
@@ -22,8 +23,6 @@ def rawHeader(key, msg):
         if line == '\n':
             break
  
-    #print ''.join(header)
-    #cass.writeHeader(key, ''.join(header))
     return ''.join(header)    
 #
 def rawBody(key, email):    
@@ -37,7 +36,6 @@ def rawBody(key, email):
         if len(line) == 0:
             break #EOF
             
-    # cass.writeBody(key, ''.join(body))
     return ''.join(body)    
 #    
 def getMetaData(msg):    
@@ -52,7 +50,7 @@ def getMetaData(msg):
     date = msg.get('Date')
     subject = msg.get('Subject')
     
-    return (uid, domain, eFrom, date, subject)
+    return (uid, domain, eFrom, subject, date)
 #    
 def writeAttachments(msg, boundary, boundaries):    
     if msg.is_multipart():        
@@ -69,8 +67,9 @@ def writeAttachments(msg, boundary, boundaries):
         m = hashlib.sha1()
         m.update(msg.get_payload())
         mHash = m.hexdigest()
-        boundaries.append((msg.get_filename(), len(msg.get_payload()), mHash, '--' + boundary))
-        cass.writeDataAttachment(mHash, msg.get_payload())
+        boundary = '--' + boundary
+        boundaries.append((msg.get_filename(), len(msg.get_payload()), mHash, boundary))
+        cass.writeAttachment(mHash, msg.get_payload())
 #        
 def newRawBody(key, f, attachments):    
     body = []
@@ -118,53 +117,49 @@ def newRawBody(key, f, attachments):
                     break #EOF
             break                
   
-    cass.writeBody(key, ''.join(body))       
+    return ''.join(body)       
 #
 def mimeEmail(key, f, msg):
        
     header = rawHeader(key, f)
-    body = rawBody(key, f)
     metaData = getMetaData(msg)  
     
-
     #find attachment's boundary and write attachments
     attachments = []
     writeAttachments(msg, 0, attachments)
     
-    uid = parseaddr(msg.get('To'))[1]
-    domain = uid.partition('@')[2]
-    
-    cass.writeUid(key, uid, domain)
-    cass.writeInboxLast(uid, key)
-    
-    
     if len(attachments) != 0:
-        cass.writeMetaAttachment(key, attachments)
-        newRawBody(key, f, attachments)
+        body = newRawBody(key, f, attachments)
     else:
-        rawBody(key, f)    
-#
+        body = rawBody(key, f)    
+
+    cass.writeMetaData(key, envelope, header, size, metaData, attachments)
+    cass.writeContent(key, body)
+#    
 def rawEmail(key, f, msg):
     
     header = rawHeader(key, f)
     body = rawBody(key, f)
     metaData = getMetaData(msg)        
+    attch = []
     
-    #cass.writeEmail(key, envelope, header, body, metaData)
+    cass.writeMetaData(key, envelope, header, size, metaData, attch)
+    cass.writeContent(key, body)
 ##############################################################################
 emailFile = sys.argv[1]
 
+#??? whats the key?
+
 f = open(emailFile, 'r')
 msg = email.message_from_file(f)
-f.seek(0) 
+f.seek(0)
 
 env = open(emailFile + '.envelope', 'r')
 envelope = env.readline()
 env.close()
 
-mimeEmail(emailFile, f, msg)
-#??? whats the key?
-"""
+size = os.path.getsize(emailFile) 
+
 try:  
     if msg.is_multipart():
         mimeEmail(emailFile, f, msg)
@@ -173,5 +168,8 @@ try:
         
 except NoBoundaryInMultipartDefect:
     rawEmail(emailFile, f, msg)
-"""     
+     
 f.close()
+
+
+#print cass.getHeader(emailFile)
