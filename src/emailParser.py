@@ -7,7 +7,6 @@ import os
 import hashlib
 #import StringIO
 from email.errors import NoBoundaryInMultipartDefect
-from celery.task import task
 
 #from email.Iterators import _structure
 #from email.utils import parseaddr
@@ -121,7 +120,7 @@ def newRawBody(key, f, attachments):
   
     return ''.join(body)       
 #
-def mimeEmail(key, f, msg):
+def mimeEmail(key, f, msg, envelope, size):
        
     header = rawHeader(key, f)
     metaData = getMetaData(msg)  
@@ -138,22 +137,23 @@ def mimeEmail(key, f, msg):
     cass.writeMetaData(key, envelope, header, size, metaData, attachments)
     cass.writeContent(key, body)
 #    
-def rawEmail(key, f, msg):
+def rawEmail(key, f, msg, envelope, size):
     
     header = rawHeader(key, f)
     body = rawBody(key, f)
     metaData = getMetaData(msg)        
     attch = []
     
+    
     cass.writeMetaData(key, envelope, header, size, metaData, attch)
     cass.writeContent(key, body)
 ##############################################################################
-emailFile = sys.argv[1]
+#emailFile = sys.argv[1]
 
 #??? whats the key?
 
-@task
-def emailParser(emailFile):
+
+def parseEmail(emailFile):
     
     f = open(emailFile, 'r')
     msg = email.message_from_file(f)
@@ -167,12 +167,12 @@ def emailParser(emailFile):
 
     try:  
         if msg.is_multipart():
-            mimeEmail(emailFile, f, msg)
+            mimeEmail(emailFile, f, msg, envelope, size)
         else:
-            rawEmail(emailFile, f, msg)
+            rawEmail(emailFile, f, msg, envelope, size)
         
     except NoBoundaryInMultipartDefect:
-        rawEmail(emailFile, f, msg)
+        rawEmail(emailFile, f, msg, envelope, size)
      
     f.close()
 
