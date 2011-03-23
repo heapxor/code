@@ -50,8 +50,12 @@ def getMetaData(msg):
     #TODO:??? whats the domain format, fix at the fulltext? 
     domain = uid.partition('@')[2] #????
     
+    #from je povinny podla RFC / ???
     eFrom = msg.get('From')
-    
+
+    if eFrom == None:
+        eFrom = 'bla'
+   
     #date je povinny podla RFC ak chyba? spam / reject?
     date = msg.get('Date')
     if date == None:
@@ -86,8 +90,8 @@ def writeAttachments(msg, boundary, boundaries):
         
         try:                            
             fileName = str(msg.get_filename())                
-        except UnicodeEncodeError:                
-            fileName = fileName.encode('utf-8')
+        except UnicodeEncodeError:
+            fileName = msg.get_filename().encode('utf-8')
                  
         m.update(msg.get_payload()) # ??? 
         boundaries.append((fileName, len(msg.get_payload()), mHash, boundary))
