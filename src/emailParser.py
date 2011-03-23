@@ -44,13 +44,25 @@ def getMetaData(msg):
     #X-VF-Scanner-Rcpt-To: x@y
     #TODO:??? normally its in envelope
     uid = msg.get('X-VF-Scanner-Rcpt-To')
+    
+    if uid == None:
+        uid = 'charvat@cvut1.centrum.cz'
     #TODO:??? whats the domain format, fix at the fulltext? 
-    domain = uid.partition('@')[2]
+    domain = uid.partition('@')[2] #????
     
     eFrom = msg.get('From')
-    date = msg.get('Date')
-    subject = msg.get('Subject')
     
+    #date je povinny podla RFC ak chyba? spam / reject?
+    date = msg.get('Date')
+    if date == None:
+        date = 'Fri, 18 Mar 2011 16:30:00 +0000'
+    
+    
+    subject = msg.get('Subject')
+    if subject == None:
+        subject = 'test' 
+    
+    #prepracovat na list kde kazda polozka je touple (nazov:hodnota)
     return (uid, domain, eFrom, subject, date)
 #    
 def writeAttachments(msg, boundary, boundaries):    
@@ -62,14 +74,23 @@ def writeAttachments(msg, boundary, boundaries):
             writeAttachments(subpart, boundary, boundaries)
 
     if (msg.get_content_type() != 'text/plain' and msg.get_content_type() != 'text/html' and
-            msg.get_content_maintype() != 'multipart'):
+            msg.get_content_maintype() != 'multipart' and msg.get_content_maintype() != 'message'):
+        
+        
         
         #??? for sure sha1
         m = hashlib.sha1()
-        m.update(msg.get_payload())
+        m.update(msg.get_payload()) # ??? 
         mHash = m.hexdigest()
         boundary = '--' + boundary
-        boundaries.append((msg.get_filename(), len(msg.get_payload()), mHash, boundary))
+        
+        try:                            
+            fileName = str(msg.get_filename())                
+        except UnicodeEncodeError:                
+            fileName = fileName.encode('utf-8')
+                 
+        m.update(msg.get_payload()) # ??? 
+        boundaries.append((fileName, len(msg.get_payload()), mHash, boundary))
         cass.writeAttachment(mHash, msg.get_payload())
 #        
 def newRawBody(key, f, attachments):    
@@ -130,7 +151,9 @@ def mimeEmail(key, f, msg, envelope, size):
     writeAttachments(msg, 0, attachments)
     
     if len(attachments) != 0:
-        body = newRawBody(key, f, attachments)
+        body ='test'
+        #???
+        #body = newRawBody(key, f, attachments)
     else:
         body = rawBody(key, f)    
 

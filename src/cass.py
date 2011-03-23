@@ -59,7 +59,7 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
                                           'envelope': envelope,
                                           'header': header,
                                           'from': metaData[2],
-                                          'subject': metaData[3],
+                                          'subject': metaData[3], #???? FIX
                                           'date': metaData[4],
                                           'size': str(size),
                                           'attachments': str(len(attachments))
