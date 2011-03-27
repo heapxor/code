@@ -4,12 +4,13 @@ import sys
 import email
 #import cass
 import os
+import time
 import hashlib
 #import StringIO
 from email.errors import NoBoundaryInMultipartDefect
 
-from email.Iterators import _structure
-from email.iterators import body_line_iterator
+#from email.Iterators import _structure
+#from email.iterators import body_line_iterator
 #from email.utils import parseaddr
 #from email.utils import getaddresses
 
@@ -25,7 +26,7 @@ class BufferedData():
     def readline(self):        
         if not self.lines:
             line = self.f.readline()
-            #self.lines.append(line)
+       
         else:
             line = self.lines.pop()
         
@@ -111,7 +112,7 @@ def metaAttachment(msg, boundary, boundaries ,bSet):
         for subpart in msg.get_payload():
             metaAttachment(subpart, boundary, boundaries, bSet)
   
-    print msg.get_content_type()
+    #print msg.get_content_type()
     if (msg.get_content_type() != 'text/plain' and msg.get_content_type() != 'text/html' and
             msg.get_content_maintype() != 'multipart' and msg.get_content_maintype() != 'message' and msg.get_content_type() != 'text/rfc822-headers'):
                 
@@ -144,51 +145,42 @@ def newRawBody(key, f, attachments, bSet):
     body = []
     bound = ()
     
-    
-    print attachments
-    
     while True:       
         if stat == 0:
                    
-            print "Stat:0"
+            #print "Stat:0"
             while True:
                 line = buff.readline()
                 body.append(line)
                 
                 #print line,
                 if line[0:len(line) - 1] == bound[0]:                        
-                    #possible attach 
-                                        
+                    #possible attach                                       
                     stat = 1
-                    break
-                
+                    break                
         elif stat == 6:
-            print "Stat:6"            
+            #print "Stat:6"            
             if attachments:
-                bound = attachments.pop(0)
-                
+                bound = attachments.pop(0)                
                 stat = 0
             else:                
                 #dojdi subor do konca
                 stat = 5         
         #Attachment header
         elif stat == 1:
-            print "Stat:1"
-            
+            #print "Stat:1"            
             #print bound[1]
             while True:
                 line = buff.readline()
                 
-                body.append(line)
-                
+                body.append(line)                
                 
                 #print line
                 #content type moze byt male/velke to same bound ??
                 if 'Content-Type:' in line or 'Content-type:' in line:
                     if bound[1] in line:
                         stat = 10
-                    else:
-                        
+                    else:                        
                         stat = 0
                     break
                 
@@ -197,29 +189,26 @@ def newRawBody(key, f, attachments, bSet):
                     break
                 
         elif stat == 10:
-            print "Stat:10"
+            #print "Stat:10"
             #print "inline:" + line
             while True:                
                 line = buff.readline()
                 
-                body.append(line)
-                
-                #print line,
-                
+                body.append(line)                
+                #print line,                
                 if line == '\n':
                     stat = 2
                     break
-                
         #body
         elif stat == 2:   
             #print line,
-            print "Stat:2"     
+            #print "Stat:2"     
             while True:
                 line = buff.readline()
             
                 if line == '\n':
                     buff.fakeNewLine()
-                    print 'Chod do trojky'
+                    #print 'Chod do trojky'
                     stat = 3
                     break
                 elif line[0:len(line)-1] in bSet:
@@ -229,11 +218,10 @@ def newRawBody(key, f, attachments, bSet):
                     stat = 4
                     break
                 else:
-                    data.append(line)
-            
+                    data.append(line)            
             prevStat = 2        
         elif stat == 3:  
-            print "Stat:3"          
+            #print "Stat:3"          
             while True:                
                 line = buff.readline()
                 
@@ -247,49 +235,46 @@ def newRawBody(key, f, attachments, bSet):
                     stat = 2
                     break            
             
-            print "pocet newlinow:" + str(buff.sizeNewLines())
+            #print "pocet newlinow:" + str(buff.sizeNewLines())
             
             
             body2 = []
             #for z in range(buff.sizeNewLines()):
             for newLine in buff.newlineStack:
+                buff.newlineStack.pop()
                 if stat == 4:
-                    #print 'do 4ky'
-                    
-                    body2.append(newLine)
-                    
+                    #print 'do 4ky'                    
+                    body2.append(newLine)                                        
                 else:
                     #do 2ky
-                    data.append(newLine)                    
+                    data.append(newLine)
+                    
             
             if stat == 2:
                 data.append(line)
                     
             prevStat = 3
         elif stat == 4:
-            print "Stat:4"
-            if prevStat == 2:
-                
+            #print "Stat:4"
+            if prevStat == 2:                
                 hash = writeAttachment(''.join(data))
-                body.append(hash)
-                
+                body.append(hash)                
                 
             elif prevStat == 3:
                 
-                print 'Z 333'
+                #print 'Z 333'
                 hash = writeAttachment(''.join(data))
                 
                 body.append(hash)
                 
-                print 'BODY2 size : ' + str(len(body2))
+                #print 'BODY2 size : ' + str(len(body2))
                 for newLines in body2:
                     body.append(newLines)
-                    print "KOKOT"                    
+                    #print "KOKOT"                    
                 #print ''.join(body)                            
-            stat = 6 
-            
+            stat = 6             
         elif stat == 5:
-            print "Stat:5"
+            #print "Stat:5"
             while True:
                 line = buff.readline()            
             
@@ -300,7 +285,7 @@ def newRawBody(key, f, attachments, bSet):
                 body.append(line)
                 
         elif stat == 7:
-            print "Stat:7"
+            #print "Stat:7"
             break
                     
     return ''.join(body)  
@@ -315,14 +300,18 @@ def mimeEmail(key, f, msg, envelope, size):
     attachments = []
     bSet = set()
 
+    start = time.time()
+
     metaAttachment(msg, 0, attachments, bSet)
 
     if len(attachments) != 0:
         body = newRawBody(key, f, attachments, bSet)
-        print body
+        duration = time.time() - start
+        print body,
     else:
         body = rawBody(key, f)    
   
+    print 'PARSING TAKES:' + str(duration)
     #cass.writeMetaData(key, envelope, header, size, metaData, attachments)
     #cass.writeContent(key, body)
 #    
