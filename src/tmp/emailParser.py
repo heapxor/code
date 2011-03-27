@@ -12,20 +12,33 @@ from email.Iterators import _structure
 #from email.utils import parseaddr
 #from email.utils import getaddresses
 
-class BufferedData(object):
-    
-    def __init__(self):
-            self.partial = ''
-            
-            self.lines = []
-            
-            self.oefstack = []
-            
+NeedMoreData = object()
 
-    def readline(self):
+class BufferedData():
+    
+    def __init__(self, f):            
+            self.lines = []            
+            self.newlineStack = []
+            self.f = f
+            
+    def readline(self):        
+        if not self.lines:
+            line = self.f.readline()
+            #self.lines.append(line)
+        else:
+            line = self.lines.pop()
         
-        line = self.lines.pop()
-        
+        return line
+    
+    def fakeNewLine(self):        
+        self.newlineStack.append('\n')
+    
+    def popNewLines(self):
+        return self.newlineStack.pop()
+    
+    def sizeNewLines(self):
+        return len(self.newlineStack)
+    
     def unreadline(self, line):
         self.lines.append(line)
 
@@ -121,73 +134,124 @@ def writeAttachment(key, data):
     print ''
             
 def newRawBody(key, f, attachments, bSet):    
-    body = []
+   
     stat = 0;
     i = 0
-    ret = 0 
-
-    print attachments
     
-    while True:
+    attachDict = {}
+    
+    for att in attachments:
+        attachDict[att[2]] = 0
         
+        
+    buff = BufferedData(f)    
+    data = []
+    body = []
+    val = -1
+    
+    #print 'initial i:' + str(i)
+
+    while True:        
         if stat == 0:            
             while True:
-                line = f.readline()               
+                   
+                line = buff.readline()                
                 body.append(line)
                 
-                if line.startswith(attachments[i][2]):
-                    ret = ret + 1
+                if attachDict.has_key(line[0:len(line)-1]):
+                    #print 'has key'
+                    val = attachDict[line[0:len(line)-1]] + 1
+                    attachDict[line[0:len(line)-1]] = val
+                    #print attachDict
                 
-                if ret == attachments[i][3]:
+                                
+                if i != len(attachments) and val == attachments[i][3]:
+                    #print 'stat 1'
                     stat = 1
-                    ret = 0
                     break
-        #header
+
+                if len(line) == 0:
+                    stat = 5
+                    break #EOF
+                
+        #Attachment header
         elif stat == 1:
             while True:
-                line = f.readline()               
-                body.append(line)   
+                line = buff.readline()
+                
+                body.append(line)
                 
                 if line == '\n':
-                    stat = 2
-                    
+                    stat = 2                    
                     break
         #body
-        elif stat == 2:
-            data = []
-            
-            print bSet
+        elif stat == 2:            
             while True:
-                line = f.readline()    
-                
-                #print line[0:len(line)-1]
-                bound = line[0:len(line)-1] in bSet
-                           
-                    
-                if bound:
-                    
-                    print 'DDDD'
-                    
-                    attch = ''.join(data)
-                    
-                    print attch,
-                    
-                    i = i + 1                    
-                    
-                    """
-                    print len(line)
-                    print line[0:len(line)-1],
-                    """
-                    print len(attch)
+                line = buff.readline()
+            
+                if line == '\n':
+                    buff.fakeNewLine()
                     stat = 3
-                    
-                    if i == len(attachments):                        
-                        stat = 4
                     break
-                    
+                elif line[0:len(line)-1] in bSet:
+                    buff.unreadline(line)
+                    stat = 4
+                    break
                 else:
                     data.append(line)
+            
+            prevStat = 2        
+        elif stat == 3:            
+            while True:                
+                line = buff.readline()
+                
+                if line == '\n':
+                    buff.fakeNewLine()
+                elif line[0:len(line)-1] in bSet:
+                    buff.unreadline(line)
+                    stat = 4
+                    break
+                else:
+                    stat = 2
+                    break            
+            
+            for z in range(buff.sizeNewLines()):
+                if stat == 4:
+                    #print 'do 4ky'
+                    body2 = []
+                    body2.append(buff.popNewLines())
+                else:
+                    data.append(buff.popNewLines())                    
+                    data.append(line)
                     
+            prevStat = 3
+        elif stat == 4:
+            
+            if prevStat == 2:
+                #print ''.join(body)
+                #insert mark
+                #handle attachment data
+                #print ''.join(data)
+                print ''
+            elif prevStat == 3:
+                
+                #print ''.join(body)
+                #insert mark & handle data
+                #
+                #body2 
+                #print 'z trojky'
+                print ''
+
+            #print 'I' + str(i)
+            stat = 0
+            i = i + 1        
+            #print 'incrementing:' + str(i)
+        elif stat == 5:
+            break
+
+                    
+    #return ''.join(body)  
+"""             
         elif stat == 3:
             print stat 
             if line[0:len(line)-1] == attachments[i][2] and attachments[i][3] == 1:
@@ -196,18 +260,7 @@ def newRawBody(key, f, attachments, bSet):
                 stat = 0
             
             break
-        elif stat == 4:
-            print stat 
-            while True:                                
-                line = f.readline()
-                body.append(line)
-                
-                if len(line) == 0:
-                    break #EOF
-            break
-        
-    return ''.join(body)  
-
+"""
 """    
     while True:      
         #start of attachment data  
@@ -350,7 +403,7 @@ def rawEmail(key, f, msg, envelope, size):
     metaData = getMetaData(msg)        
     attch = []
     
-    print 'bbb'   
+       
     #cass.writeMetaData(key, envelope, header, size, metaData, attch)
     #cass.writeContent(key, body)
 ##############################################################################
