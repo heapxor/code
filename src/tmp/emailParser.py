@@ -220,7 +220,7 @@ def newRawBody(key, f, attachments, bSet):
                 else:
                     data.append(line)            
             prevStat = 2        
-        elif stat == 3:  
+        elif stat == 3:
             #print "Stat:3"          
             while True:                
                 line = buff.readline()
