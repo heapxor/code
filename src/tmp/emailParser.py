@@ -128,11 +128,16 @@ def metaAttachment(msg, boundary, boundaries, bSet, level):
         
         
 #        
-def writeAttachment(key, data):
+def writeAttachment(data):
     
-    #cass.writeAttachment(key, data)#write data
-    print ''
-            
+    #??? for sure sha1
+    m = hashlib.sha1()          
+    m.update(data) 
+    key = m.hexdigest()
+                    
+    #cass.writeAttachment(key, data)#write data                                 
+    return 'MARK:' + key + '\n' 
+       
 def newRawBody(key, f, attachments, bSet):    
    
     stat = 0;
@@ -147,28 +152,37 @@ def newRawBody(key, f, attachments, bSet):
     buff = BufferedData(f)    
     data = []
     body = []
-    val = -1
+
     
     #print 'initial i:' + str(i)
 
     while True:        
-        if stat == 0:            
+        if stat == 0:
+                 
             while True:
                    
                 line = buff.readline()                
                 body.append(line)
                 
+                
+                
+                print '>>>>' + line 
+                
+                print attachDict
                 if attachDict.has_key(line[0:len(line)-1]):
-                    #print 'has key'
+                    print 'has key'
                     val = attachDict[line[0:len(line)-1]] + 1
                     attachDict[line[0:len(line)-1]] = val
-                    #print attachDict
-                
-                                
-                if i != len(attachments) and val == attachments[i][3]:
-                    #print 'stat 1'
-                    stat = 1
-                    break
+                        
+                    """
+                    print attachments[i]
+                    print 'VAL:' + str(val)
+                    """           
+                    if i < len(attachments) and val == attachments[i][3]:
+                    
+                        print 'DDDDDDDDDD' + line
+                        stat = 1
+                        break
 
                 if len(line) == 0:
                     stat = 5
@@ -185,7 +199,9 @@ def newRawBody(key, f, attachments, bSet):
                     stat = 2                    
                     break
         #body
-        elif stat == 2:            
+        elif stat == 2:   
+            print line,
+            print '2ka'         
             while True:
                 line = buff.readline()
             
@@ -195,6 +211,8 @@ def newRawBody(key, f, attachments, bSet):
                     break
                 elif line[0:len(line)-1] in bSet:
                     buff.unreadline(line)
+                    #print data,
+                    print line
                     stat = 4
                     break
                 else:
@@ -228,139 +246,32 @@ def newRawBody(key, f, attachments, bSet):
         elif stat == 4:
             
             if prevStat == 2:
-                #print ''.join(body)
-                #insert mark
-                #handle attachment data
-                #print ''.join(data)
-                print ''
+                
+                hash = writeAttachment(''.join(data))
+                body.append(hash)
+                
+                
             elif prevStat == 3:
                 
+                print 'Z 333'
+                hash = writeAttachment(''.join(data))
+                
+                body.append(hash)
+                
+                for newLines in body2:
+                    body.append(body2.pop())
+                    
                 #print ''.join(body)
-                #insert mark & handle data
-                #
-                #body2 
-                #print 'z trojky'
-                print ''
-
-            #print 'I' + str(i)
+                            
             stat = 0
             i = i + 1        
-            #print 'incrementing:' + str(i)
+            
         elif stat == 5:
             break
 
                     
-    #return ''.join(body)  
-"""             
-        elif stat == 3:
-            print stat 
-            if line[0:len(line)-1] == attachments[i][2] and attachments[i][3] == 1:
-                stat = 2
-            else:
-                stat = 0
-            
-            break
-"""
-"""    
-    while True:      
-        #start of attachment data  
-        if stat == 1: 
-            att = 0
-            while True:
-                line = f.readline()               
-                body.append(line)
-                
-                if 'Content-Type:' in line:
-                    if attachments[i][3] in line:                    
-                        att = 1
-                        
-                if line == '\n':
-                    #start of our attachment data
-                    if att == 1:      
-                        stat = 2
-                    else:
-                        #its html/text/message/...
-                        stat = 3
-                        
-                    print stat 
-                    break
-        #read attachment data
-        elif stat == 2:
-            att = []
-            
-            
-            while True: 
-                line = f.readline()
-                 
-                bound = line[0:len(line)-1] in bSet
-                
-                
-                if line == '\n' or bound:
-                                
-                    data = ''.join(att)
-                
-                    print line,
-                
-                    if bound == True:
-                        print 'in set' 
-                    
-                    #??? for sure sha1
-                    m = hashlib.sha1()          
-                    m.update(data) 
-                    mHash = m.hexdigest()
-                    
-                    #writeAttachment(mHash, data)
-                                 
-                    body.append('MARK:' + mHash + '\n')                    
-                    body.append(line)   
-                    
-                    stat = 3                    
-                    i = i + 1    
-                    
-    
-                    if bound:
-                        stat = 5
-                    
-                    if i == len(attachments):
-                        stat = 4
-                     
-                    print 'a:' + i 
-                    print 'a:' + len(attachments)
-                    print stat 
-                    break
-                else:
-                    att.append(line)                    
-        #find possible attachment boundary
-        elif stat == 3:
-            while True:
-                line = f.readline()             
-                body.append(line)
-                
-                if line.startswith(attachments[i][2]):
-                    stat = 1
-                    break                
-        #remain data of email
-        elif stat == 4:
-            while True:
-                                
-                line = f.readline()
-                body.append(line)
-                
-                
-                if len(line) == 0:
-                    break #EOF
-            break                
-        elif stat == 5:
-            if line.startswith(attachments[i][2]):
-                    stat = 1                    
-            else:
-                stat = 3
-            
-            print stat
- """           
-     
-                
-         
+    return ''.join(body)  
+
 #
 def mimeEmail(key, f, msg, envelope, size):
        
@@ -373,23 +284,10 @@ def mimeEmail(key, f, msg, envelope, size):
     metaAttachment(msg, 0, attachments, bSet, 1)
     
     #print attachments
-    """
-    _structure(msg)
-    print '0:'
-    _structure(msg.get_payload(0))
-    print '1'
-    _structure(msg.get_payload(1))
-    print 'sub'
-    _structure(msg.get_payload(1).get_payload(0))
-    _structure(msg.get_payload(1).get_payload(0).get_payload(1))
-    
-    print '2'
-    _structure(msg.get_payload(2))
-    """    
-  
+
     if len(attachments) != 0:
         body = newRawBody(key, f, attachments, bSet)
-        #print body,
+        print body,
     else:
         body = rawBody(key, f)    
   
