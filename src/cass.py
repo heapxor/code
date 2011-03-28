@@ -48,11 +48,26 @@ write_consistency_level=ConsistencyLevel.QUORUM)
 
 
 
+
+#################
+###TODO: !!!!
+### Chunkovy zapis
+### zapis do DB
+### 
+### ako vymysliet test
+### sha1 na attch? 
+###
+### FIXED:
+###    windows/unix newline 
+
+
+
 # INSERTING APIs
 
 def writeMetaData(key, envelope, header, size, metaData, attachments):  
 #metadata (uid, domain, eFrom, subject, date)
-#attach ((msg.get_filename(), len(msg.get_payload()), mHash, '--' + boundary)
+#FIX:???(name, size, hash),
+
 
     batch.insert(messagesMetaData, key, { 'uid': metaData[0],
                                           'domain': metaData[1],
@@ -72,8 +87,7 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
             batch.insert(messagesMetaData, key, { cname: 
                                                          'filename:' + str(attch[0]) + 
                                                           ',size:'+ str(attch[1]) + 
-                                                          ',hash:'+ str(attch[2]) + 
-                                                          ',boundary:' + str(attch[3])
+                                                          ',hash:'+ str(attch[2])
                                                   })
             i = i + 1
 
@@ -109,6 +123,8 @@ def writeAttachment(mHash, data):
         chunkWriter(mHash, data)
     else:
         messagesAttachment.insert(mHash, {'1': data})
+        
+        
 #
 #
 #

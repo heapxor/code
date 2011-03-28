@@ -25,6 +25,7 @@ class BufferedData():
     def readline(self):        
         if not self.lines:
             line = self.f.readline()
+            line = line.replace('\r\n', '\n').replace('\r', '\n')
        
         else:
             line = self.lines.pop()
@@ -44,6 +45,7 @@ def rawHeader(key, msg):
     
     while True:
         line = msg.readline()
+        line = line.replace('\r\n', '\n').replace('\r', '\n')
       
         header.append(line)
       
@@ -57,6 +59,7 @@ def rawBody(key, email):
     
     while True:
         line = email.readline()
+        line = line.replace('\r\n', '\n').replace('\r', '\n')
         
         body.append(line)
         
@@ -274,8 +277,8 @@ def mimeEmail(key, f, msg, envelope, size):
     if len(attachments) != 0:
         body = newRawBody(key, f, attachments, bSet)
         duration = time.time() - start
-        #print header,
-        #print body,
+        print header,
+        print body,
     #no attach to deduplicate
     else:
         body = rawBody(key, f)    
@@ -305,7 +308,7 @@ def parseEmail(emailFile):
     msg = email.message_from_file(f)
     f.seek(0)
 
-    env = open(emailFile + '.envelope', 'r')
+    env = open(emailFile + '.envelope', 'r')    
     envelope = env.readline()
     env.close()
 
