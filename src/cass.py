@@ -21,6 +21,8 @@ update column family  messagesMetaData with column_metadata=[{column_name: uid, 
 
 import datetime
 from datetime import datetime
+import StringIO
+
 
 import pycassa
 from pycassa.cassandra.ttypes import ConsistencyLevel
@@ -30,7 +32,7 @@ __all__ = ['save_header']
 
 
 pool = pycassa.ConnectionPool(keyspace='emailArchive',
-server_list=['cvut3:9160'], prefill=False)
+server_list=['cvut3:9160', 'cvut4:9160', 'cvut5:9160'], prefill=False)
 
 batch = Mutator(pool, queue_size=50)
 
@@ -55,7 +57,6 @@ write_consistency_level=ConsistencyLevel.QUORUM)
 ### ladit inserty atd?
 ### 
 ### FIXED:
-###    windows/unix newline 
 ###    body/attachment in chunks (512KB)
 ###    inserted into C*
 
@@ -79,14 +80,18 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
                                           'attachments': str(len(attachments))
                                         })
     
+    #filename,size,hash
+    
+    #print attachments
+    
     if len(attachments) != 0:
-        i=0
+        i=1
         for attch in attachments: 
             cname = 'a' + str(i)   
             batch.insert(messagesMetaData, key, { cname: 
-                                                         'filename:' + str(attch[0]) + 
-                                                          ',size:'+ str(attch[1]) + 
-                                                          ',hash:'+ str(attch[2])
+                                                        str(attch[0]) + 
+                                                          ','+ str(attch[1]) + 
+                                                          ','+ str(attch[2])
                                                   })
             i = i + 1
 
@@ -138,6 +143,11 @@ def writeAttachment(mHash, data):
     #KB
     dataSize = len(data) / 1024    
     
+    
+    print data,
+    
+    print ">>>>>>>>>>>>>>>>>>>>>>>>>"
+    
     #>1MB==1024KB
     if dataSize > 1024:
         chunkWriter(mHash, data, messagesAttachment)
@@ -157,3 +167,190 @@ def getHeader(key):
     x = messagesMetaData.get(key, column_count=col)
     return x
 
+
+def getEmailInfo(key):
+    
+    ret= messagesMetaData.get(key, columns= [
+                                             'from', 
+                                             'subject',
+                                             'date',
+                                             'size',
+                                             'attachments'
+                                             ])
+    
+    return ret
+
+
+def getRawHeader(key):
+        
+    ret= messagesMetaData.get(key, columns= ['header'])
+    
+    return ret['header']
+
+def getMimeInfo(key):
+    
+    attch = messagesMetaData.get(key, columns= ['attachments'])  
+    
+    return int(attch['attachments'])
+    
+def getRawBody(key):
+    
+    columnsNumb =  messagesContent.get_count(key)
+    
+    body = messagesContent.get(key, column_count = columnsNumb)
+    
+    nBody = []
+    #join chunks
+    for k, bodyPart in body.iteritems():
+        nBody.append(bodyPart)
+    
+    
+    return ''.join(nBody)
+
+
+def getAttachHash(key, attch):
+
+    #pocet stlpcov - uz ich len potom fetchuj a spajaj...
+    #get_count()
+    #multiget_count
+    
+    eColumn = 'a' + str(attch)
+    attch = messagesMetaData.get(key, column_start='a0', column_finish=eColumn)
+    
+    #print attch
+    
+    attchHashList =[]
+    for k, att in attch.iteritems():
+        attchHashList.append('DEDUPLICATION:' + att.rsplit(',')[2])
+        
+    return attchHashList 
+    
+def getAttachData(key):
+    
+    
+    parts = messagesAttachment.get_count(key)
+    
+    
+    #print "Parts:" + str(parts) + "key" + str(key)
+    
+    #att= {}
+    att = messagesAttachment.get(key, column_count=parts)
+    
+    #print att
+    
+    #print x
+    #print y
+    
+    #print key 
+    
+    nAtt = []
+    #join chunks
+    for k, attPart in att.iteritems():
+        nAtt.append(attPart)
+    
+    #print 'brinck'
+    #print ''.join(nAtt)
+    
+    
+    
+    return ''.join(nAtt)
+#
+
+    
+def getMimeBody(key, attch):
+    
+    rawBody = getRawBody(key)
+    
+    attchHashes = getAttachHash(key, attch)    
+    
+    body = StringIO.StringIO()
+    body.write(rawBody)
+    body.seek(0)
+    
+    
+    #print attchHashes
+    
+    sig = 0
+    newBody = []    
+    hash = attchHashes[0]
+    while True:
+        line = body.readline()
+        
+        #if len(attchHashes) == 1:
+        #    print line 
+        
+        #FIX: only inside of the right boundary?
+        if line.startswith(hash) and attchHashes:
+            
+            #if len(attchHashes) == 1:
+            #    print ''.join(newBody)
+           
+            #print 'INSIDEHER'      
+            att = getAttachData(hash.rsplit(':')[1])
+            #newBody.append('a')
+            
+            
+            newBody.append(att)
+            
+            
+            #print att,
+            #if len(attchHashes) == 1:
+            #    print att
+            
+            #print ''.join(newBody)
+            attchHashes.pop(0)
+            
+            if attchHashes:
+                hash = attchHashes[0]
+            
+
+        elif len(line) == 0:
+            
+            break #EOF
+        else:
+    #        if len(attchHashes) == 1:
+     #           print 'aaapending'
+            newBody.append(line)
+        
+        """
+        if len(attchHashes) == 1:
+            
+            line = body.readline()
+            newBody.append(line)
+
+            line = body.readline()
+            newBody.append(line)
+
+            line = body.readline()
+            newBody.append(line)
+
+            line = body.readline()
+            newBody.append(line)
+
+
+            line = body.readline()
+            newBody.append(line)
+
+
+            line = body.readline()
+            newBody.append(line)
+
+
+            line = body.readline()
+            newBody.append(line)
+            
+            print ''.join(newBody)
+            
+            break
+        """
+    #print ''.join(newBody)
+    
+    
+    #x = messagesAttachment.get('f043e185350a36a179bffb18e3d303d1c491554c')
+    #y = messagesAttachment.get('8c64a563b033bb55761ae78bc0358fac5c7bf96e')
+    
+    #print x
+    #print y
+    
+    return ''.join(newBody)
+    

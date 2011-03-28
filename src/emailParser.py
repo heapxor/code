@@ -15,6 +15,15 @@ from email.errors import NoBoundaryInMultipartDefect
 #from email.utils import getaddresses
 
 
+##################################
+##
+## TODO:
+##     data expiration (?)
+## FIXED:
+##    windows/unix newline
+##   
+
+
 class BufferedData():
     
     def __init__(self, f):            
@@ -239,14 +248,20 @@ def newRawBody(key, f, attachments, bSet):
         elif stat == 4:
             #print "Stat:4"          
             
-            ddata = ''.join(data)  
-            attKey = writeAttachment(ddata)                
+            #ddata = ''.join(data)  
+            attKey = writeAttachment(''.join(data))                
             hash = 'DEDUPLICATION:' + attKey + '\n'
             body.append(hash)                
+            
+            #print ''.join(data)
+            #print '>>>>>>>>>>>>>>>>>>'
                 
             #(name, size, hash), its metadata for messageMetaData CF
-            metaData  = (bound[2], len(ddata), attKey)
+            #metaData  = (bound[2], len(ddata), attKey)
+            metaData  = (bound[2], len(''.join(data)), attKey)
             attchList.append(metaData)
+            
+            data = []
             
             if prevStat == 3:
                 for newLines in body2:
