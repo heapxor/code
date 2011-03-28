@@ -280,6 +280,7 @@ def mimeEmail(key, f, msg, envelope, size):
     metaAttachment(msg, 0, attachments, bSet)
 
     if len(attachments) != 0:
+        #print attachments
         (body, attach) = newRawBody(key, f, attachments, bSet)
         duration = time.time() - start
         #print header,
@@ -301,7 +302,7 @@ def rawEmail(key, f, msg, envelope, size):
     metaData = getMetaData(msg)        
     #attch = []
        
-    cass.writeMetaData(key, envelope, header, size, metaData, None)
+    cass.writeMetaData(key, envelope, header, size, metaData, [])
     cass.writeContent(key, body)
 ##############################################################################
 
@@ -331,8 +332,8 @@ def parseEmail(emailFile):
     f.close()
 
 
-"""
 def main():
+    
     email = sys.argv[1]
     parseEmail(email)
 
@@ -340,4 +341,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-"""

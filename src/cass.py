@@ -48,17 +48,16 @@ write_consistency_level=ConsistencyLevel.QUORUM)
 
 
 
-
 #################
 ###TODO: !!!!
-### Chunkovy zapis
-### zapis do DB
-### 
 ### ako vymysliet test
 ### sha1 na attch? 
-###
+### ladit inserty atd?
+### 
 ### FIXED:
 ###    windows/unix newline 
+###    body/attachment in chunks (512KB)
+###    inserted into C*
 
 
 
@@ -68,7 +67,7 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
 #metadata (uid, domain, eFrom, subject, date)
 #FIX:???(name, size, hash),
 
-
+        
     batch.insert(messagesMetaData, key, { 'uid': metaData[0],
                                           'domain': metaData[1],
                                           'envelope': envelope,
@@ -99,9 +98,28 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
         
     batch.send()
 #
-def chunkWriter(key, data):
+
+def splitter(l, n):
+    i = 0
+    chunk = l[:n]
+    while chunk:
+        yield chunk
+        i += n
+        chunk = l[i:i+n]
+
+def chunkWriter(key, data, cf):
     
-    print 'a'
+    #print 'in the chunk'
+    #chunk size
+    chunkSize = 512
+    
+    i = 0
+    for chunk in splitter(data, chunkSize):
+        id = str(i)
+        batch.insert(cf, key, { id : chunk })
+        i += 1
+    
+    batch.send()
 #    
 def writeContent(key, body):
     """
@@ -111,18 +129,20 @@ def writeContent(key, body):
     bodySize = len(body) / 1024
     
     if bodySize >  1024:
-        chunkWriter(key, body)
+        chunkWriter(key, body, messagesContent)
     else:
-        messagesContent.insert(key, {'1': body})
+        messagesContent.insert(key, {'0': body})
 #    
 def writeAttachment(mHash, data):
     
+    #KB
     dataSize = len(data) / 1024    
     
+    #>1MB==1024KB
     if dataSize > 1024:
-        chunkWriter(mHash, data)
+        chunkWriter(mHash, data, messagesAttachment)
     else:
-        messagesAttachment.insert(mHash, {'1': data})
+        messagesAttachment.insert(mHash, {'0': data})
         
         
 #
