@@ -18,6 +18,7 @@ from email.errors import NoBoundaryInMultipartDefect
 ##################################
 ##
 ## TODO:
+##     NEWLINES BROKEN?
 ##     data expiration (?)
 ## FIXED:
 ##    windows/unix newline
@@ -139,7 +140,7 @@ def writeAttachment(data):
     m.update(data)
     key = m.hexdigest()
     
-    cass.writeAttachment(key, data)                                 
+    ###cass.writeAttachment(key, data)                                 
     return key 
 #
 def newRawBody(key, f, attachments, bSet):    
@@ -251,7 +252,11 @@ def newRawBody(key, f, attachments, bSet):
             #ddata = ''.join(data)  
             attKey = writeAttachment(''.join(data))                
             hash = 'DEDUPLICATION:' + attKey + '\n'
-            body.append(hash)                
+            
+            ###body.append(hash) uncomment
+            
+            body.append(''.join(data))
+                            
             
             #print ''.join(data)
             #print '>>>>>>>>>>>>>>>>>>'
@@ -298,8 +303,8 @@ def mimeEmail(key, f, msg, envelope, size):
         #print attachments
         (body, attach) = newRawBody(key, f, attachments, bSet)
         duration = time.time() - start
-        #print header,
-        #print body,
+        print header,
+        print body,
     #no attach to deduplicate
     else:
         body = rawBody(key, f)    
@@ -307,8 +312,8 @@ def mimeEmail(key, f, msg, envelope, size):
     #time of email parsing
     #return duration
     
-    cass.writeMetaData(key, envelope, header, size, metaData, attach)    
-    cass.writeContent(key, body)
+    ###cass.writeMetaData(key, envelope, header, size, metaData, attach)    
+    ###cass.writeContent(key, body)
 # 
 def rawEmail(key, f, msg, envelope, size):
     
@@ -317,8 +322,8 @@ def rawEmail(key, f, msg, envelope, size):
     metaData = getMetaData(msg)        
     #attch = []
        
-    cass.writeMetaData(key, envelope, header, size, metaData, [])
-    cass.writeContent(key, body)
+    ###cass.writeMetaData(key, envelope, header, size, metaData, [])
+    ###cass.writeContent(key, body)
 ##############################################################################
 
 
@@ -350,8 +355,14 @@ def parseEmail(emailFile):
 def main():
     
     email = sys.argv[1]
+    start = time.time()
+    
     parseEmail(email)
+    
+    
+    duration = time.time() - start
 
+    
 
 if __name__ == '__main__':
     main()
