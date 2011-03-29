@@ -16,10 +16,10 @@ from email.errors import NoBoundaryInMultipartDefect
 
 
 ##################################
-##
 ## TODO:
 ##     data expiration (?)
 ##     buggy for some cases that doesnt satisfy RFC
+##
 ## FIXED:
 ##    windows/unix newline
 ##    newlines in txt attachment fixed
@@ -140,7 +140,8 @@ def writeAttachment(data):
     m.update(data)
     key = m.hexdigest()
     
-    ###cass.writeAttachment(key, data)                                 
+    #print key
+    cass.writeAttachment(key, data)                                 
     return key 
 #
 def newRawBody(key, f, attachments, bSet):    
@@ -335,8 +336,8 @@ def mimeEmail(key, f, msg, envelope, size):
     #time of email parsing
     #return duration
     
-    ###cass.writeMetaData(key, envelope, header, size, metaData, attach)    
-    ###cass.writeContent(key, body)
+    cass.writeMetaData(key, envelope, header, size, metaData, attach)    
+    cass.writeContent(key, body)
 # 
 def rawEmail(key, f, msg, envelope, size):
     
@@ -345,8 +346,8 @@ def rawEmail(key, f, msg, envelope, size):
     metaData = getMetaData(msg)        
     #attch = []
        
-    ###cass.writeMetaData(key, envelope, header, size, metaData, [])
-    ###cass.writeContent(key, body)
+    cass.writeMetaData(key, envelope, header, size, metaData, [])
+    cass.writeContent(key, body)
 ##############################################################################
 
 
@@ -379,8 +380,8 @@ def parseEmail(emailFile):
 
     duration = time.time() - start 
    
-    return duration
-"""
+#    return duration
+
 def main():
     
     email = sys.argv[1]
@@ -395,4 +396,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-"""
+

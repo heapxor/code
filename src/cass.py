@@ -19,14 +19,13 @@ update column family  messagesMetaData with column_metadata=[{column_name: uid, 
  {column_name: domain, index_type: KEYS, index_name: domainIdx, validation_class: UTF8Type}];
 """
 
-import datetime
+import datetime, StringIO
 from datetime import datetime
-import StringIO
-
 
 import pycassa
 from pycassa.cassandra.ttypes import ConsistencyLevel
 from pycassa.batch import Mutator
+from pycassa.cassandra.ttypes import NotFoundException
 
 __all__ = ['save_header']
 
@@ -49,24 +48,25 @@ lastInbox = pycassa.ColumnFamily(pool, 'lastInbox',
 write_consistency_level=ConsistencyLevel.QUORUM)
 
 
-
 #################
 ###TODO: !!!!
 ### ako vymysliet test
 ### sha1 na attch? 
 ### ladit inserty atd?
-### 
+###
+###
 ### FIXED:
 ###    body/attachment in chunks (512KB)
 ###    inserted into C*
+###    first attch hash lookup -> then inser
 
 
-
+#################
 # INSERTING APIs
 
 def writeMetaData(key, envelope, header, size, metaData, attachments):  
 #metadata (uid, domain, eFrom, subject, date)
-#FIX:???(name, size, hash),
+#FIX:(name, size, hash) json?
 
         
     batch.insert(messagesMetaData, key, { 'uid': metaData[0],
@@ -74,13 +74,11 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
                                           'envelope': envelope,
                                           'header': header,
                                           'from': metaData[2],
-                                          'subject': metaData[3], #???? FIX
+                                          'subject': metaData[3], #??? FIX
                                           'date': metaData[4],
                                           'size': str(size),
                                           'attachments': str(len(attachments))
                                         })
-    
-    #filename,size,hash
     
     #print attachments
     
@@ -111,12 +109,11 @@ def splitter(l, n):
         yield chunk
         i += n
         chunk = l[i:i+n]
-
-def chunkWriter(key, data, cf):
-    
+#
+def chunkWriter(key, data, cf):    
     #print 'in the chunk'
-    #chunk size
-    chunkSize = 512
+    #chunk size 512KB
+    chunkSize = 524288
     
     i = 0
     for chunk in splitter(data, chunkSize):
@@ -138,36 +135,35 @@ def writeContent(key, body):
     else:
         messagesContent.insert(key, {'0': body})
 #    
-def writeAttachment(mHash, data):
-    
+def writeAttachment(mHash, data):    
     #KB
     dataSize = len(data) / 1024    
-    
-    
-    print data,
-    
-    print ">>>>>>>>>>>>>>>>>>>>>>>>>"
-    
-    #>1MB==1024KB
-    if dataSize > 1024:
-        chunkWriter(mHash, data, messagesAttachment)
-    else:
-        messagesAttachment.insert(mHash, {'0': data})
         
-        
-#
-#
+    
+    try:
+        messagesAttachment.get(mHash, column_count=1)
+    except NotFoundException:
+        #>1MB==1024KB
+        if dataSize > 1024:
+            chunkWriter(mHash, data, messagesAttachment)
+        else:
+            messagesAttachment.insert(mHash, {'0': data})
+            
+            
+            
+    
+################
 #
 # READING APIs
 #
 def getHeader(key):
-    print key
+    #print key
     col = messagesMetaData.get_count(key);     
-    print col
+    #print col
     x = messagesMetaData.get(key, column_count=col)
     return x
 
-
+#
 def getEmailInfo(key):
     
     ret= messagesMetaData.get(key, columns= [
@@ -311,46 +307,10 @@ def getMimeBody(key, attch):
     #        if len(attchHashes) == 1:
      #           print 'aaapending'
             newBody.append(line)
-        
-        """
-        if len(attchHashes) == 1:
-            
-            line = body.readline()
-            newBody.append(line)
 
-            line = body.readline()
-            newBody.append(line)
-
-            line = body.readline()
-            newBody.append(line)
-
-            line = body.readline()
-            newBody.append(line)
-
-
-            line = body.readline()
-            newBody.append(line)
-
-
-            line = body.readline()
-            newBody.append(line)
-
-
-            line = body.readline()
-            newBody.append(line)
-            
-            print ''.join(newBody)
-            
-            break
-        """
     #print ''.join(newBody)
     
-    
-    #x = messagesAttachment.get('f043e185350a36a179bffb18e3d303d1c491554c')
-    #y = messagesAttachment.get('8c64a563b033bb55761ae78bc0358fac5c7bf96e')
-    
-    #print x
-    #print y
+
     
     return ''.join(newBody)
     
