@@ -206,9 +206,15 @@ def newRawBody(key, f, attachments, bSet):
             #print "Stat:2"     
             while True:
                 line = buff.readline()
-            
+                """
+                if 'A###' in line:
+                    print "A## read" 
+                    print repr(line)
+                """
                 if line == '\n':
+                    #print repr(line)
                     buff.fakeNewLine()
+                    #print buff.newlineStack
                     stat = 3
                     break
                 elif line[0:len(line)-1] in bSet:
@@ -217,34 +223,47 @@ def newRawBody(key, f, attachments, bSet):
                     break
                 else:
                     data.append(line)
-            prevStat = 2       
+            prevStat = 2
+            
+                       
         elif stat == 3:
             #print "Stat:3"          
             while True:                
                 line = buff.readline()
-                
-                if line == '\n':
+                #print repr(line)
+                if line == '\n':                    
                     buff.fakeNewLine()
+                    #print buff.newlineStack
                 elif line[0:len(line)-1] in bSet:
                     buff.unreadline(line)
                     stat = 4
                     break
                 else: #text
+                    #print 'TEXT?'
+                    #print repr(line)
+                    
                     stat = 2
                     break            
             
-            body2 = []            
+            #print 'cistim stack:' + str(len(buff.newlineStack))
+            body2 = []
+            #print "stack:"     
+            #print buff.newlineStack       
             for newLine in buff.newlineStack:
-                buff.newlineStack.pop()
+                #print 'for'
+                
                 if stat == 4:                    
                     body2.append(newLine)                                        
                 else:
                     #do 2ky
+                    #print 'do 2'
                     data.append(newLine)
-                    
+                #buff.newlineStack.pop()
+                
+            buff.newlineStack = []        
             if stat == 2:
                 data.append(line)
-                    
+            #print 'opustam 3'
             prevStat = 3
         elif stat == 4:
             #print "Stat:4"          
