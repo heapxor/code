@@ -147,6 +147,8 @@ def newRawBody(key, f, attachments, bSet):
    
     stat = 6;
 
+    #print attachments
+    
     buff = BufferedData(f)    
     data = []
     body = []
@@ -159,9 +161,11 @@ def newRawBody(key, f, attachments, bSet):
             while True:
                 line = buff.readline()
                 body.append(line)
-    
+                #print line,
                 if line[0:len(line) - 1] == bound[0]:                        
-                    #possible attach boundary                      
+                    #possible attach boundary       
+                    #print line               
+                    print 'goin to 1'
                     stat = 1
                     break
         #automata start                        
@@ -173,22 +177,33 @@ def newRawBody(key, f, attachments, bSet):
             else:                
                 #read end of the email
                 stat = 5         
+            print '>>>'
+            print bound[0]
+            print stat
+            print '>>>'
         #attachment header
         elif stat == 1:
-            #print "Stat:1"
+            print "Stat:1"
             while True:
                 line = buff.readline()
                 
+                print repr(line) 
+                #print bound[1]
                 body.append(line)                
                 #is there content-type? / some emails use diff case of content-type
+                
                 if 'content-type:' in line.lower():
-                    if bound[1] in line:
+                    
+                    if bound[1] in line.lower():
+                        
+                        print 'attch'
                         stat = 10
                         break
                     #else:                        
                     #    stat = 0
                     #break                
                 if line == '\n':
+                    print 'goin to 0'
                     stat = 0            
                     break
         #read rest of the header for selected attachment        
@@ -201,11 +216,13 @@ def newRawBody(key, f, attachments, bSet):
                 if line == '\n':
                     stat = 2
                     break
+            #print line
         #attachment body (data)
         elif stat == 2:   
             #print "Stat:2"     
             while True:
                 line = buff.readline()
+                print line
                 """
                 if 'A###' in line:
                     print "A## read" 
@@ -224,7 +241,7 @@ def newRawBody(key, f, attachments, bSet):
                 else:
                     data.append(line)
             prevStat = 2
-            
+            #print line
                        
         elif stat == 3:
             #print "Stat:3"          
@@ -244,7 +261,7 @@ def newRawBody(key, f, attachments, bSet):
                     
                     stat = 2
                     break            
-            
+            print 'stat' + str(stat)
             #print 'cistim stack:' + str(len(buff.newlineStack))
             body2 = []
             #print "stack:"     
@@ -291,7 +308,10 @@ def newRawBody(key, f, attachments, bSet):
                 for newLines in body2:
                     body.append(newLines)
                                                 
-            stat = 6             
+            stat = 6
+            print 'leaving 4' 
+            print 'stat' + str(stat) 
+                       
         elif stat == 5:
             #print "Stat:5"
             while True:
@@ -309,21 +329,25 @@ def newRawBody(key, f, attachments, bSet):
 def mimeEmail(key, f, msg, envelope, size):
        
     header = rawHeader(key, f)
+    #print header,
     metaData = getMetaData(msg)  
     
     #find attachment's boundary and write attachments
     attachments = []
     bSet = set()
 
+    
     start = time.time()    
     metaAttachment(msg, 0, attachments, bSet)
-
+    
+    print attachments
+    
     if len(attachments) != 0:
         #print attachments
         (body, attach) = newRawBody(key, f, attachments, bSet)
         duration = time.time() - start
-        print header,
-        print body,
+        #print header,
+        #print body,
     #no attach to deduplicate
     else:
         body = rawBody(key, f)    
