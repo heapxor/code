@@ -18,11 +18,11 @@ from email.errors import NoBoundaryInMultipartDefect
 ##################################
 ##
 ## TODO:
-##     NEWLINES BROKEN?
 ##     data expiration (?)
+##     buggy for some cases that doesnt satisfy RFC
 ## FIXED:
 ##    windows/unix newline
-##   
+##    newlines in txt attachment fixed
 
 
 class BufferedData():
@@ -165,7 +165,6 @@ def newRawBody(key, f, attachments, bSet):
                 if line[0:len(line) - 1] == bound[0]:                        
                     #possible attach boundary       
                     #print line               
-                    print 'goin to 1'
                     stat = 1
                     break
         #automata start                        
@@ -177,33 +176,24 @@ def newRawBody(key, f, attachments, bSet):
             else:                
                 #read end of the email
                 stat = 5         
-            print '>>>'
-            print bound[0]
-            print stat
-            print '>>>'
         #attachment header
         elif stat == 1:
-            print "Stat:1"
+            #print "Stat:1"
             while True:
                 line = buff.readline()
                 
-                print repr(line) 
-                #print bound[1]
                 body.append(line)                
                 #is there content-type? / some emails use diff case of content-type
-                
                 if 'content-type:' in line.lower():
                     
                     if bound[1] in line.lower():
                         
-                        print 'attch'
                         stat = 10
                         break
                     #else:                        
                     #    stat = 0
                     #break                
                 if line == '\n':
-                    print 'goin to 0'
                     stat = 0            
                     break
         #read rest of the header for selected attachment        
@@ -222,7 +212,6 @@ def newRawBody(key, f, attachments, bSet):
             #print "Stat:2"     
             while True:
                 line = buff.readline()
-                print line
                 """
                 if 'A###' in line:
                     print "A## read" 
@@ -261,7 +250,7 @@ def newRawBody(key, f, attachments, bSet):
                     
                     stat = 2
                     break            
-            print 'stat' + str(stat)
+            
             #print 'cistim stack:' + str(len(buff.newlineStack))
             body2 = []
             #print "stack:"     
@@ -309,9 +298,6 @@ def newRawBody(key, f, attachments, bSet):
                     body.append(newLines)
                                                 
             stat = 6
-            print 'leaving 4' 
-            print 'stat' + str(stat) 
-                       
         elif stat == 5:
             #print "Stat:5"
             while True:
@@ -336,22 +322,16 @@ def mimeEmail(key, f, msg, envelope, size):
     attachments = []
     bSet = set()
 
-    
-    start = time.time()    
     metaAttachment(msg, 0, attachments, bSet)
-    
-    print attachments
-    
+
     if len(attachments) != 0:
         #print attachments
         (body, attach) = newRawBody(key, f, attachments, bSet)
-        duration = time.time() - start
         #print header,
         #print body,
     #no attach to deduplicate
     else:
         body = rawBody(key, f)    
-        duration = 0 
     #time of email parsing
     #return duration
     
@@ -373,6 +353,8 @@ def rawEmail(key, f, msg, envelope, size):
 #??? whats the email key?
 def parseEmail(emailFile):
     
+    start = time.time()
+
     f = open(emailFile, 'r')
     msg = email.message_from_file(f)
     f.seek(0)
@@ -382,7 +364,7 @@ def parseEmail(emailFile):
     env.close()
 
     size = os.path.getsize(emailFile)
-    
+
     try:  
         if msg.is_multipart():
             mimeEmail(emailFile, f, msg, envelope, size)
@@ -391,10 +373,14 @@ def parseEmail(emailFile):
         
     except NoBoundaryInMultipartDefect:
         rawEmail(emailFile, f, msg, envelope, size)
-     
+    
+
     f.close()
 
-
+    duration = time.time() - start 
+   
+    return duration
+"""
 def main():
     
     email = sys.argv[1]
@@ -409,4 +395,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
+"""
