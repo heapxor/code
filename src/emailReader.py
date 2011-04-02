@@ -35,8 +35,8 @@ def rawEmail(key):
         #body & repair attach
         body = cass.getMimeBody(key, mime)
         
-    print header,
-    print body,
+    return header + body
+    
     
 def main():
     

@@ -1,4 +1,12 @@
 #!/usr/bin/perl -T
+
+##################
+# TODO:
+#	smtp transaction mechanism or fork() & insert into DB
+#
+
+
+
 #
 # File: qmail-scanner-queue.pl
 # Version: 2.08 - st - patch - 20100626

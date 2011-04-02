@@ -18,11 +18,12 @@ from email.errors import NoBoundaryInMultipartDefect
 ##################################
 ## TODO:
 ##     data expiration (?)
-##     buggy for some cases that doesnt satisfy RFC
+##     
 ##
 ## FIXED:
 ##    windows/unix newline
 ##    newlines in txt attachment fixed
+##    mime body headers with FOLDING 
 
 
 class BufferedData():
@@ -144,6 +145,9 @@ def writeAttachment(data):
     cass.writeAttachment(key, data)                                 
     return key 
 #
+
+
+
 def newRawBody(key, f, attachments, bSet):    
    
     stat = 6;
@@ -180,9 +184,12 @@ def newRawBody(key, f, attachments, bSet):
         #attachment header
         elif stat == 1:
             #print "Stat:1"
+            fold = 0
+            #??? fix that dirt...bez rozdielu ci som v spravnom headri tak dojdi ho az do konca? 
             while True:
+                #print '>>>>'
                 line = buff.readline()
-                
+                #print line, 
                 body.append(line)                
                 #is there content-type? / some emails use diff case of content-type
                 if 'content-type:' in line.lower():
@@ -193,9 +200,41 @@ def newRawBody(key, f, attachments, bSet):
                         break
                     #else:                        
                     #    stat = 0
-                    #break                
+                    #break
+                    else:
+                        #print 'folding'
+                        #possible folding in header field                        
+                        while True:
+                            line = buff.readline()
+                            
+                            #folding
+                            #print repr(line[0]),
+                            if line[0] == '\t' or line[0] == ' ':
+                                
+                                
+                                body.append(line)
+                                
+                                #     print 'bound:' + bound[1]
+                                #     print line
+                                if bound[1] in line.lower():
+                                    #        print 'yup'
+                                    stat = 10
+                                    fold = 1
+                                    break
+                                else:
+                                    break
+                            else:                                
+                                break
+                            
+                            buff.unreadline(line)
+                         
+                        #print fold
+                         
                 if line == '\n':
                     stat = 0            
+                    break                
+                elif fold == 1:
+                    stat = 10
                     break
         #read rest of the header for selected attachment        
         elif stat == 10:

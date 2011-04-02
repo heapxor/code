@@ -49,11 +49,9 @@ write_consistency_level=ConsistencyLevel.QUORUM)
 
 
 #################
-###TODO: !!!!
-### ako vymysliet test
-### sha1 na attch? 
-### ladit inserty atd?
-###
+###TODO: 
+### Attachment 0 column - number of links
+### SHA1 ?? theory 
 ###
 ### FIXED:
 ###    body/attachment in chunks (512KB)
@@ -139,17 +137,19 @@ def writeAttachment(mHash, data):
     #KB
     dataSize = len(data) / 1024    
         
-    
+    stat = 0
     try:
         messagesAttachment.get(mHash, column_count=1)
     except NotFoundException:
         #>1MB==1024KB
+        stat = 1
         if dataSize > 1024:
             chunkWriter(mHash, data, messagesAttachment)
         else:
             messagesAttachment.insert(mHash, {'0': data})
             
-            
+    if stat == 0:
+        print 'AttachmentWriter:[deduplication in effect]'
             
     
 ################
