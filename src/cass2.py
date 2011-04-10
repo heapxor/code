@@ -30,21 +30,12 @@ from pycassa.cassandra.ttypes import NotFoundException
 __all__ = ['save_header']
 
 
-pool = pycassa.ConnectionPool(keyspace='emailArchive',
-server_list=['cvut3:9160', 'cvut4:9160', 'cvut5:9160'], prefill=False)
+pool = pycassa.ConnectionPool(keyspace='Keyspace1',
+server_list=['cvut8:9160'], prefill=False)
 
 batch = Mutator(pool, queue_size=50)
 
-messagesMetaData = pycassa.ColumnFamily(pool, 'messagesMetaData',
-write_consistency_level=ConsistencyLevel.QUORUM)
-
-messagesContent = pycassa.ColumnFamily(pool, 'messagesContent',
-write_consistency_level=ConsistencyLevel.QUORUM)
-
-messagesAttachment = pycassa.ColumnFamily(pool, 'messagesAttachment',
-write_consistency_level=ConsistencyLevel.QUORUM)
-
-lastInbox = pycassa.ColumnFamily(pool, 'lastInbox',
+lastInbox = pycassa.ColumnFamily(pool, 'Standard1',
 write_consistency_level=ConsistencyLevel.QUORUM)
 
 
@@ -158,10 +149,17 @@ def writeAttachment(mHash, data):
 #
 def getHeader(key):
     #print key
-    col = messagesMetaData.get_count(key);     
     #print col
-    x = messagesMetaData.get(key, column_count=col)
-    return x
+
+    x = lastInbox.get(key)
+    
+    print x 
+    print len(x['C0'])
+
+
+getHeader('0')
+
+
 
 #
 def getEmailInfo(key):
@@ -305,7 +303,7 @@ def getMimeBody(key, attch):
             break #EOF
         else:
     #        if len(attchHashes) == 1:
-    #           print 'aaapending'
+     #           print 'aaapending'
             newBody.append(line)
 
     #print ''.join(newBody)
