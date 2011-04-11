@@ -2,7 +2,7 @@
 
 import sys
 import email
-import cass
+#import cass
 import os
 import time
 import hashlib
@@ -18,7 +18,7 @@ from email.errors import NoBoundaryInMultipartDefect
 ##################################
 ## TODO:
 ##     data expiration (?)
-##     
+##     message/rfc822
 ##
 ## FIXED:
 ##    windows/unix newline
@@ -39,7 +39,7 @@ class BufferedData():
             line = line.replace('\r\n', '\n').replace('\r', '\n')
        
         else:
-            line = self.lines.pop()
+            line = self.lines.pop(0)
         
         return line
     
@@ -63,7 +63,10 @@ def rawHeader(key, msg):
         if line == '\n':
             break
  
-    return ''.join(header)    
+        #because the body is optional
+        if len(line) == 0:
+            break #EOF
+    return ''.join(header)
 #
 def rawBody(key, email):    
     body = []
@@ -142,25 +145,165 @@ def writeAttachment(data):
     key = m.hexdigest()
     
     #print key
-    cass.writeAttachment(key, data)                                 
+    ###cass.writeAttachment(key, data)                                 
     return key 
 #
-
-
 
 def newRawBody(key, f, attachments, bSet):    
    
     stat = 6;
-
     #print attachments
-    
     buff = BufferedData(f)    
     data = []
     body = []
     bound = ()
     attchList = []
+    badEmail = True    
+    boundaryHeader = 0
+    attchTotal = len(attachments)
+    attchWritten = 0
+    #print attchTotal
     
-    while True:       
+    
+    
+    while True:
+        
+        line = buff.readline()
+        
+        if len(line) == 0:
+            #print 'EOF' 
+            break        
+     
+        #automata start                        
+        if stat == 6:
+            #print 'Stat:6'
+            body.append(line)
+            
+            #if attchWritten > 2 and bound[2] == '08022011222.jpg':
+                #print '>>>>' + line,
+                
+            if attachments and line[0:len(line) - 1] == attachments[0][0]:                        
+                #possible attach boundary        
+                #attachments.pop(0)      
+                #print line      
+                bound = attachments[0]                
+                stat = 1
+                                  
+        elif stat == 1:
+            #print "Stat:1"
+            
+            body.append(line)                           
+            #is there content-type? / some emails use diff *case of content-type
+            if 'content-type:' in line.lower():              
+                if bound[1] in line.lower():         
+                    boundaryHeader = 1
+                else:
+                    #possible folding in header field
+                    
+                    line = buff.readline()
+                    #print repr(line[0]),
+                    if line[0] == '\t' or line[0] == ' ':
+                        body.append(line)
+                                
+                        if bound[1] in line.lower():
+                            boundaryHeader = 1                                     
+                    else:                        
+                        buff.unreadline(line)
+            elif line == '\n':                                
+                if boundaryHeader == 1:
+                    stat = 2
+                else:
+                    stat = 6      
+                    
+        elif stat == 2:   
+            #print "Stat:2" 
+            boundaryHeader = 0
+            
+            if line == '\n':
+                #print repr(line)
+                buff.fakeNewLine()
+                #print buff.newlineStack
+                stat = 3                
+            elif line[0:len(line)-1] in bSet:
+                buff.unreadline(line)
+                stat = 4                
+            else:
+                data.append(line)
+                
+            prevStat = 2           
+                       
+        elif stat == 3:
+            #print "Stat:3"          
+
+            if line == '\n':                    
+                buff.fakeNewLine()
+                #print buff.newlineStack
+            elif line[0:len(line)-1] in bSet:
+                buff.unreadline(line)
+                stat = 4
+                
+            else: #text  
+                stat = 2
+                         
+            if stat == 2 or stat == 4:        
+                #print 'cistim stack:' + str(len(buff.newlineStack))
+                body2 = []
+                for newLine in buff.newlineStack:
+                    if stat == 4:                    
+                        body2.append(newLine)                                        
+                    else:
+                        data.append(newLine)
+                    
+                buff.newlineStack = []        
+                if stat == 2:
+                    data.append(line)
+            
+            prevStat = 3
+            
+        elif stat == 4:
+            #print "Stat:4"          
+            #ddata = ''.join(data)  
+            attKey = writeAttachment(''.join(data))                
+            hash = 'DEDUPLICATION:' + attKey + '\n'
+            
+            body.append(hash)
+            
+            #create list of attachmentsData -
+            
+            #body.append(''.join(data))
+                
+            #(name, size, hash), its metadata for messageMetaData CF
+            #metaData  = (bound[2], len(ddata), attKey)
+            metaData  = (bound[2], len(''.join(data)), attKey)
+            attchList.append(metaData)
+            
+            data = []
+            
+            if prevStat == 3:
+                for newLines in body2:
+                    body.append(newLines)
+                                                
+            stat = 6
+            
+            #print 'att written:' + bound[2]
+
+            
+            attchWritten += 1
+            attachments.pop(0)
+            
+            buff.unreadline(line)
+            
+                            
+                            
+                            
+    if attchTotal != attchWritten:
+        #print 'bad email'
+        return ()
+                            
+    return (''.join(body), attchList)      
+    
+"""    
+    while True and badEmail:       
         if stat == 0:                   
             #print "Stat:0"
             while True:
@@ -252,11 +395,7 @@ def newRawBody(key, f, attachments, bSet):
             #print "Stat:2"     
             while True:
                 line = buff.readline()
-                """
-                if 'A###' in line:
-                    print "A## read" 
-                    print repr(line)
-                """
+
                 if line == '\n':
                     #print repr(line)
                     buff.fakeNewLine()
@@ -349,8 +488,8 @@ def newRawBody(key, f, attachments, bSet):
                 body.append(line)
                             
             break
-                    
-    return (''.join(body), attchList)
+"""
+
 #
 def mimeEmail(key, f, msg, envelope, size):
        
@@ -366,7 +505,14 @@ def mimeEmail(key, f, msg, envelope, size):
 
     if len(attachments) != 0:
         #print attachments
-        (body, attach) = newRawBody(key, f, attachments, bSet)
+#        (body, attach) = newRawBody(key, f, attachments, bSet)
+        ret = newRawBody(key, f, attachments, bSet)
+        if ret:
+            (body, attach) = ret
+            ###cass.writeMetaData(key, envelope, header, size, metaData, attach)    
+            ###cass.writeContent(key, body)
+        else:
+            print 'Error: Bad email <' + key + '>'
         #print header,
         #print body,
     #no attach to deduplicate
@@ -374,10 +520,7 @@ def mimeEmail(key, f, msg, envelope, size):
         body = rawBody(key, f)    
     #time of email parsing
     #return duration
-    
-    cass.writeMetaData(key, envelope, header, size, metaData, attach)    
-    cass.writeContent(key, body)
-# 
+#        
 def rawEmail(key, f, msg, envelope, size):
     
     header = rawHeader(key, f)
@@ -385,8 +528,8 @@ def rawEmail(key, f, msg, envelope, size):
     metaData = getMetaData(msg)        
     #attch = []
        
-    cass.writeMetaData(key, envelope, header, size, metaData, [])
-    cass.writeContent(key, body)
+    ###cass.writeMetaData(key, envelope, header, size, metaData, [])
+    ###cass.writeContent(key, body)
 ##############################################################################
 
 
@@ -419,7 +562,7 @@ def parseEmail(emailFile):
 
     duration = time.time() - start 
    
-#    return duration
+    return duration
 
 def main():
     
@@ -431,7 +574,7 @@ def main():
     
     duration = time.time() - start
 
-    
+    #print duration
 
 if __name__ == '__main__':
     main()
