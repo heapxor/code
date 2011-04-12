@@ -26,14 +26,15 @@ import pycassa
 from pycassa.cassandra.ttypes import ConsistencyLevel
 from pycassa.batch import Mutator
 from pycassa.cassandra.ttypes import NotFoundException
+from pycassa.columnfamily import gm_timestamp
 
-__all__ = ['save_header']
+#__all__ = ['save_header']
 
 
 pool = pycassa.ConnectionPool(keyspace='emailArchive',
-server_list=['cvut3:9160', 'cvut4:9160', 'cvut5:9160'], prefill=False)
+server_list=['cvut3:9160', 'cvut4:9160'], prefill=False)
 
-batch = Mutator(pool, queue_size=50)
+batch = Mutator(pool, queue_size=100)
 
 messagesMetaData = pycassa.ColumnFamily(pool, 'messagesMetaData',
 write_consistency_level=ConsistencyLevel.QUORUM)
@@ -66,6 +67,7 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
 #metadata (uid, domain, eFrom, subject, date)
 #FIX:(name, size, hash) json?
 
+#    print 'inserting'
         
     batch.insert(messagesMetaData, key, { 'uid': metaData[0],
                                           'domain': metaData[1],
@@ -79,18 +81,30 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
                                         })
     
     #print attachments
-    
+    #print attachments 
     if len(attachments) != 0:
-        i=1
-        for attch in attachments: 
-            cname = 'a' + str(i)   
+        i=0
+        for attch in attachments:
+	    #fill with zeros because of column sorting and fetching attachments in AttachHash() 
+            fhash = 'a' + str(i).zfill(3)
+	    fname = 'b' + str(i).zfill(3)
+	    fsize = 'c' + str(i).zfill(3)
+
+	    batch.insert(messagesMetaData, key, {fhash: str(attch[2])})
+	    batch.insert(messagesMetaData, key, {fname: str(attch[0])})
+	    batch.insert(messagesMetaData, key, {fsize: str(attch[1])})
+
+	    """
             batch.insert(messagesMetaData, key, { cname: 
-                                                        str(attch[0]) + 
+                                                               str(attch[0]) + 
                                                           ','+ str(attch[1]) + 
                                                           ','+ str(attch[2])
                                                   })
+	    """
+
             i = i + 1
 
+    #print messagesMetaData.get(key)
     #top100msgs
     #####################
     #get it from msg date
@@ -109,7 +123,6 @@ def splitter(l, n):
         chunk = l[i:i+n]
 #
 def chunkWriter(key, data, cf):    
-    #print 'in the chunk'
     #chunk size 512KB
     chunkSize = 524288
     
@@ -117,9 +130,10 @@ def chunkWriter(key, data, cf):
     for chunk in splitter(data, chunkSize):
         id = str(i)
         batch.insert(cf, key, { id : chunk })
-        i += 1
-    
+	i += 1
+
     batch.send()
+    
 #    
 def writeContent(key, body):
     """
@@ -136,17 +150,17 @@ def writeContent(key, body):
 def writeAttachment(mHash, data):    
     #KB
     dataSize = len(data) / 1024    
-        
+
     stat = 0
     try:
         messagesAttachment.get(mHash, column_count=1)
     except NotFoundException:
         #>1MB==1024KB
         stat = 1
-        if dataSize > 1024:
-            chunkWriter(mHash, data, messagesAttachment)
-        else:
-            messagesAttachment.insert(mHash, {'0': data})
+    	if dataSize > 1024:
+        	chunkWriter(mHash, data, messagesAttachment)
+    	else:
+        	messagesAttachment.insert(mHash, {'0': data})
             
     if stat == 0:
         print 'AttachmentWriter:[deduplication in effect]'
@@ -203,68 +217,53 @@ def getRawBody(key):
     
     return ''.join(nBody)
 
-
 def getAttachHash(key, attch):
 
     #pocet stlpcov - uz ich len potom fetchuj a spajaj...
     #get_count()
     #multiget_count
-    
-    eColumn = 'a' + str(attch)
-    attch = messagesMetaData.get(key, column_start='a0', column_finish=eColumn)
+    #print attch 
+    eColumn = 'a' + str(attch-1).zfill(3)
+    attch = messagesMetaData.get(key, column_start='a000', column_finish=eColumn)
+   
+    #print messagesMetaData.get(key)
     
     #print attch
     
     attchHashList =[]
     for k, att in attch.iteritems():
-        attchHashList.append('DEDUPLICATION:' + att.rsplit(',')[2])
-        
+        #attchHashList.append('DEDUPLICATION:' + att.rsplit(',')[2])
+	attchHashList.append('DEDUPLICATION:' + att)
+
     return attchHashList 
     
 def getAttachData(key):
     
-    
     parts = messagesAttachment.get_count(key)
-    
-    
-    #print "Parts:" + str(parts) + "key" + str(key)
-    
-    #att= {}
+   
+    att= {}
     att = messagesAttachment.get(key, column_count=parts)
     
-    #print att
-    
-    #print x
-    #print y
-    
-    #print key 
-    
+
     nAtt = []
     #join chunks
-    for k, attPart in att.iteritems():
-        nAtt.append(attPart)
-    
-    #print 'brinck'
-    #print ''.join(nAtt)
-    
-    
-    
+    for part in range(parts):
+	nAtt.append(att[str(part)])
+
     return ''.join(nAtt)
 #
-
-    
 def getMimeBody(key, attch):
     
     rawBody = getRawBody(key)
     
     attchHashes = getAttachHash(key, attch)    
     
+
+    #print attchHashes
+
     body = StringIO.StringIO()
     body.write(rawBody)
     body.seek(0)
-    
-    
-    #print attchHashes
     
     sig = 0
     newBody = []    
@@ -272,45 +271,19 @@ def getMimeBody(key, attch):
     while True:
         line = body.readline()
         
-        #if len(attchHashes) == 1:
-        #    print line 
-        
         #FIX: only inside of the right boundary?
         if line.startswith(hash) and attchHashes:
             
-            #if len(attchHashes) == 1:
-            #    print ''.join(newBody)
-           
-            #print 'INSIDEHER'      
             att = getAttachData(hash.rsplit(':')[1])
-            #newBody.append('a')
-            
-            
             newBody.append(att)
-            
-            
-            #print att,
-            #if len(attchHashes) == 1:
-            #    print att
-            
-            #print ''.join(newBody)
             attchHashes.pop(0)
             
             if attchHashes:
                 hash = attchHashes[0]
-            
-
         elif len(line) == 0:
-            
             break #EOF
         else:
-    #        if len(attchHashes) == 1:
-    #           print 'aaapending'
             newBody.append(line)
-
-    #print ''.join(newBody)
-    
-
     
     return ''.join(newBody)
-    
+

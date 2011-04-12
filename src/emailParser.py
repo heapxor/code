@@ -2,7 +2,7 @@
 
 import sys
 import email
-#import cass
+import cass
 import os
 import time
 import hashlib
@@ -18,12 +18,14 @@ from email.errors import NoBoundaryInMultipartDefect
 ##################################
 ## TODO:
 ##     data expiration (?)
-##     message/rfc822
+##     write attachments data after check that email is not bad
+##     windows newlines -> put it back (BufferedData removes it)
 ##
 ## FIXED:
 ##    windows/unix newline
 ##    newlines in txt attachment fixed
 ##    mime body headers with FOLDING 
+##    message/rfc822
 
 
 class BufferedData():
@@ -36,7 +38,7 @@ class BufferedData():
     def readline(self):        
         if not self.lines:
             line = self.f.readline()
-            line = line.replace('\r\n', '\n').replace('\r', '\n')
+            #line = line.replace('\r\n', '\n').replace('\r', '\n')
        
         else:
             line = self.lines.pop(0)
@@ -56,11 +58,11 @@ def rawHeader(key, msg):
     
     while True:
         line = msg.readline()
-        line = line.replace('\r\n', '\n').replace('\r', '\n')
+        #line = line.replace('\r\n', '\n').replace('\r', '\n')
       
         header.append(line)
       
-        if line == '\n':
+        if line == '\n': # or line == '\r\n':
             break
  
         #because the body is optional
@@ -73,7 +75,7 @@ def rawBody(key, email):
     
     while True:
         line = email.readline()
-        line = line.replace('\r\n', '\n').replace('\r', '\n')
+        #line = line.replace('\r\n', '\n').replace('\r', '\n')
         
         body.append(line)
         
@@ -137,8 +139,6 @@ def metaAttachment(msg, parentType, boundary, attach ,bSet):
         
         #print parentType
         #print boundary
-        print msg.get_content_type()
-        
         
         try:                            
             fileName = str(msg.get_filename())                
@@ -159,7 +159,9 @@ def writeAttachment(data):
     key = m.hexdigest()
     
     #print key
-    ###cass.writeAttachment(key, data)                                 
+    #print data
+    #print data,
+    cass.writeAttachment(key, data)                                 
     return key 
 #
 
@@ -178,7 +180,7 @@ def newRawBody(key, f, attachments, bSet):
     attchWritten = 0
     #print attchTotal
     
-    print attachments
+    #print attachments
     
     while True:
         
@@ -237,8 +239,8 @@ def newRawBody(key, f, attachments, bSet):
         elif stat == 2:   
             #print "Stat:2" 
             boundaryHeader = 0
-            
-            if line == '\n':
+            #???
+            if line == '\n' or line == '\r\n' or line == '\r':
                 #print repr(line)
                 buff.fakeNewLine()
                 #print buff.newlineStack
@@ -253,8 +255,8 @@ def newRawBody(key, f, attachments, bSet):
                        
         elif stat == 3:
             #print "Stat:3"          
-
-            if line == '\n':                    
+	    #???
+            if line == '\n' or line == '\r\n' or line == '\r':
                 buff.fakeNewLine()
                 #print buff.newlineStack
             elif line[0:len(line)-1] in bSet:
@@ -280,7 +282,7 @@ def newRawBody(key, f, attachments, bSet):
             prevStat = 3
             
         elif stat == 4:
-            print "Stat:4"          
+            #print "Stat:4"          
             #ddata = ''.join(data)  
             attKey = writeAttachment(''.join(data))                
             hash = 'DEDUPLICATION:' + attKey + '\n'
@@ -318,8 +320,8 @@ def newRawBody(key, f, attachments, bSet):
             #print 'Stat:5'
             
             body.append(line)
-            
-            if line == '\n':
+            #???
+            if line == '\n' or line == '\r\n' or line == '\r':
                 stat = 2
      
                             
@@ -531,6 +533,8 @@ def mimeEmail(key, f, msg, envelope, size):
     bSet = set()
 
     metaAttachment(msg, "", 0, attachments, bSet)
+	
+    #print attachments
 
     if len(attachments) != 0:
         #print attachments
@@ -538,16 +542,23 @@ def mimeEmail(key, f, msg, envelope, size):
         ret = newRawBody(key, f, attachments, bSet)
         if ret:
             (body, attach) = ret
-            ###cass.writeMetaData(key, envelope, header, size, metaData, attach)    
-            ###cass.writeContent(key, body)
+	    #print attach
+            cass.writeMetaData(key, envelope, header, size, metaData, attach)    
+            cass.writeContent(key, body)
+
         else:
             print 'Error: Bad email <' + key + '>'
-        
-	#print header,
+        #print header,
         #print body,
     #no attach to deduplicate
     else:
-        body = rawBody(key, f)    
+    	#print 'written'
+        body = rawBody(key, f)
+	cass.writeMetaData(key, envelope, header, size, metaData, [])    
+        cass.writeContent(key, body)
+	
+
+
     #time of email parsing
     #return duration
 #        
@@ -558,8 +569,8 @@ def rawEmail(key, f, msg, envelope, size):
     metaData = getMetaData(msg)        
     #attch = []
        
-    ###cass.writeMetaData(key, envelope, header, size, metaData, [])
-    ###cass.writeContent(key, body)
+    cass.writeMetaData(key, envelope, header, size, metaData, [])
+    cass.writeContent(key, body)
 ##############################################################################
 
 
@@ -582,6 +593,7 @@ def parseEmail(emailFile):
         if msg.is_multipart():
             mimeEmail(emailFile, f, msg, envelope, size)
         else:
+	    #print 'a'
             rawEmail(emailFile, f, msg, envelope, size)
         
     except NoBoundaryInMultipartDefect:
