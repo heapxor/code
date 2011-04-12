@@ -112,16 +112,22 @@ def getMetaData(msg):
     
     return (uid, domain, eFrom, subject, date)
 #    
-def metaAttachment(msg, boundary, attach ,bSet):    
+def metaAttachment(msg, parentType, boundary, attach ,bSet):
+    
+#    parentType = ""
+        
     if msg.is_multipart():
         if  (msg.get_content_maintype() == 'multipart'):
             boundary = msg.get_boundary()
             bSet.add('--' + boundary)
             bSet.add('--' + boundary + '--')
-            
+        
+        parentType = msg.get_content_type()
+        
         for subpart in msg.get_payload():
-            metaAttachment(subpart, boundary, attach, bSet)
+            metaAttachment(subpart, parentType, boundary, attach, bSet)
   
+    
     
     if (msg.get_content_type() != 'text/plain' and msg.get_content_type() != 'text/html' and
             msg.get_content_maintype() != 'multipart' and msg.get_content_maintype() != 'message' and 
@@ -129,13 +135,21 @@ def metaAttachment(msg, boundary, attach ,bSet):
                 
         boundary = '--' + boundary
         
+        #print parentType
+        #print boundary
+        print msg.get_content_type()
+        
+        
         try:                            
             fileName = str(msg.get_filename())                
         except UnicodeEncodeError:                
             fileName = msg.get_filename().encode('utf8')
         
         #size + hash
-        attach.append((boundary, msg.get_content_type(), fileName))        
+        if parentType.lower() == 'message/rfc822':
+            attach.append((boundary, parentType, fileName))
+        else:
+            attach.append((boundary, msg.get_content_type(), fileName))        
 #        
 def writeAttachment(data):
     
@@ -152,7 +166,7 @@ def writeAttachment(data):
 def newRawBody(key, f, attachments, bSet):    
    
     stat = 6;
-    #print attachments
+
     buff = BufferedData(f)    
     data = []
     body = []
@@ -164,7 +178,7 @@ def newRawBody(key, f, attachments, bSet):
     attchWritten = 0
     #print attchTotal
     
-    
+    print attachments
     
     while True:
         
@@ -211,7 +225,12 @@ def newRawBody(key, f, attachments, bSet):
                         buff.unreadline(line)
             elif line == '\n':                                
                 if boundaryHeader == 1:
-                    stat = 2
+                    
+                    if bound[1].lower() == 'message/rfc822':
+                    
+                        stat = 5
+                    else:
+                        stat = 2
                 else:
                     stat = 6      
                     
@@ -261,7 +280,7 @@ def newRawBody(key, f, attachments, bSet):
             prevStat = 3
             
         elif stat == 4:
-            #print "Stat:4"          
+            print "Stat:4"          
             #ddata = ''.join(data)  
             attKey = writeAttachment(''.join(data))                
             hash = 'DEDUPLICATION:' + attKey + '\n'
@@ -293,6 +312,16 @@ def newRawBody(key, f, attachments, bSet):
             
             buff.unreadline(line)
             
+            
+        elif stat == 5:
+            #print line
+            #print 'Stat:5'
+            
+            body.append(line)
+            
+            if line == '\n':
+                stat = 2
+     
                             
                             
                             
@@ -501,7 +530,7 @@ def mimeEmail(key, f, msg, envelope, size):
     attachments = []
     bSet = set()
 
-    metaAttachment(msg, 0, attachments, bSet)
+    metaAttachment(msg, "", 0, attachments, bSet)
 
     if len(attachments) != 0:
         #print attachments
@@ -513,7 +542,8 @@ def mimeEmail(key, f, msg, envelope, size):
             ###cass.writeContent(key, body)
         else:
             print 'Error: Bad email <' + key + '>'
-        #print header,
+        
+	#print header,
         #print body,
     #no attach to deduplicate
     else:
