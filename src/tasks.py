@@ -1,17 +1,18 @@
-#!/usr/bin/python
-
 from emailParser import parseEmail
-from emailReader import rawEmail
-
 import celery, sys
-
+from emailReader import rawEmail
 from celery import current_app
 from celery.task import task
-
 import hashlib
+from celery.task.control import rate_limit
 
-#@task(ignore_result=True)
-@task
+from eventlet import monkey_patch
+
+monkey_patch()
+
+
+@task(ignore_result=True)
+#@task
 def insertData(fileName):
 
     logger = insertData.get_logger()
@@ -19,25 +20,43 @@ def insertData(fileName):
     logger.info("Task id %s" %  insertData.request.id)
 
     runTime = parseEmail(fileName)
-        
     #print "Running time %s" % runTime
-    return runTime
-    
-    
-@task
-def readData(key):
-    
-    f = open('', 'r')
+    #print fileName
+    #return runTime
+
+
+#@task(ignore_result=True, rate_limit="15/m")
+@task(ignore_result=True)
+def checkData(key):
+
+
+    logger = insertData.get_logger()
+    logger.info("Reading email %s" % key)
+    logger.info("Task id %s" %  checkData.request.id)
+
+    f = open(key, 'r')
     sEmail = f.readlines()
     f.close()
-    
-    sHash = hashlib.new(''.join(sEmail))
-    sHash = sHash.hexdigest()
-    
+
+    m = hashlib.sha1()
+    m.update(''.join(sEmail))
+    sHash = m.hexdigest()
+
+    #print key
     email = rawEmail(key)
+    #email = ''
+
     
-    dHash = hashlib.new(email)
-    
+    m = hashlib.sha1()
+    m.update(email)
+    dHash = m.hexdigest()
+ 
     if sHash != dHash:
-        print '[Error/EmailTest] Email corupted.'
-        
+        logger.info("[Error/EmailTest] Email corrupted.] < %s >" % key)
+	path = '/big/testemails/' + key[key.rfind('/')+1:]
+    	f = open(path, 'w')
+    	f.write(email)
+	f.close()
+    else:
+    	logger.info("[Email data test: OK]")
+

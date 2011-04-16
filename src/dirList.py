@@ -3,11 +3,12 @@ import os, sys, time
 from os.path import join, getsize
 
 from tasks import insertData
+from tasks import checkData
 from celery.exceptions import TimeLimitExceeded
 from celery.utils import gen_unique_id
 from celery.result import TaskSetResult
 from celery import current_app
-
+from celery.task.control import rate_limit
 
 """
 		     try:
@@ -23,8 +24,12 @@ def main():
     connection = current_app.broker_connection()
     publisher = current_app.amqp.TaskPublisher(connection)
 
+    start = time.time()
+
+
+
     try:
-    	for root, dirs, files in os.walk('/big/emailBackup/'):
+    	for root, dirs, files in os.walk('/big/mails'):
 	    for name in files:
 	        email = join(root,name)
 	        
@@ -32,30 +37,46 @@ def main():
 		    size = getsize(email)
 		    emailStats[0] += 1
 		    emailStats[1] += size
-		    ret = insertData.apply_async((email, ), publisher=publisher)
-		    tset.subtasks.append(ret)
+		    #ret = 
+		    #print email
 
-	            if emailStats[0] == 3300:
-		    	break
+		    #insertData.apply_async((email, ), publisher=publisher)
+		    #tset.subtasks.append(ret)
+		    checkData.apply_async((email,), publisher=publisher)
+		    #testTask.delay()
+		    #checkData.apply_async(('/big/mails/0/cvut112996822748053011',), publisher=publisher)
+	            #if emailStats[0] == 1000:
+		    #	break
+                    
+		    if emailStats[0] % 3000 == 0:
+		        time.sleep(10)
+		    	print emailStats[0]
+            
+	    #if emailStats[0] == 1000:
+	    #    break
 
-	    if emailStats[0] == 3300:
-	        break
-   	
-	time.sleep(20)
-        print("Total time: %r" % sum(tset.join(propagate=False)))
-	#print tset.join()
+  
+  	#print("Total time: %r" % sum(tset.join(propagate=False)))
+	#print([(r.status, r.result, r.traceback) for r in tset.subtasks])
+  	
+	#print("Total time: %r" % sum(tset.join(propagate=False)))
 
-	#print("Tasks %d" % tset.completed_count())
+	#print([r.traceback for r in tset.subtasks if r.failed()])
+	#print([r.status, r.result, r.traceback for r in tset.subtasks])	
+	#time.sleep(10)
+        #print("Tasks %d" % tset.completed_count())
+
     except EnvironmentError:
-    	print 'read err'
+    	print 'Read err'
     finally:
     	publisher.close()
 	connection.close()
 
-    
+    duration  = time.time() - start
    
     print "number of e: " + str(emailStats[0])
     print "size of e: " + str(emailStats[1])
+    print "duration:" + str(duration/60)
 
 if __name__ == '__main__':
     main()
