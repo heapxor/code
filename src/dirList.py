@@ -41,30 +41,27 @@ def main():
 		    #print email
 
 		    #insertData.apply_async((email, ), publisher=publisher)
-		    #tset.subtasks.append(ret)
 		    checkData.apply_async((email,), publisher=publisher)
 		    #testTask.delay()
-		    #checkData.apply_async(('/big/mails/0/cvut112996822748053011',), publisher=publisher)
-	            #if emailStats[0] == 1000:
+		    #tset.subtasks.append(ret)
+
+	            #if emailStats[0] == 10:
 		    #	break
                     
 		    if emailStats[0] % 3000 == 0:
-		        time.sleep(10)
+		        time.sleep(5)
 		    	print emailStats[0]
             
-	    #if emailStats[0] == 1000:
+	    #if emailStats[0] == 10:
 	    #    break
 
   
   	#print("Total time: %r" % sum(tset.join(propagate=False)))
 	#print([(r.status, r.result, r.traceback) for r in tset.subtasks])
-  	
-	#print("Total time: %r" % sum(tset.join(propagate=False)))
 
 	#print([r.traceback for r in tset.subtasks if r.failed()])
-	#print([r.status, r.result, r.traceback for r in tset.subtasks])	
-	#time.sleep(10)
         #print("Tasks %d" % tset.completed_count())
+	#print("Numb of compared emails : %r" % sum(tset.join(propagate=False)))
 
     except EnvironmentError:
     	print 'Read err'

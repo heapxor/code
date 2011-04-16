@@ -32,7 +32,8 @@ def rawEmail(key):
 
     #is the email in DB?    
     if emailCheck(key) == 0:
-        return 'Email is not in the DB'
+        #return 'Email is not in the DB'
+        return 0
     else:    
         header = cass.getRawHeader(key)
         
