@@ -73,8 +73,16 @@ def elasticEmail(envelope, metaData, attchs, body):
     #??? encode it somehow
     subject = metaData[3]
     
-    #Date from email header -- radther anylze by ES then format itself...
-    date = metaData[4]
+    #Date from email header - analyze it?
+    #date = metaData[4]
+    
+    #date from envelope
+    #"2009-11-15T14:12:12",
+    date = fields[0]
+    d = time.strptime(date, "%a, %d %b %Y %H:%M:%S %Z")
+    date = str(d.tm_year) + "-" + str(d.tm_mon) + "-" + str(d.tm_mday) + "T" + str(d.tm_hour) + ":" + str(d.tm_min) + ":" + str(d.tm_sec)    
+    
+    
     
     #attachments list
     attchList = "["

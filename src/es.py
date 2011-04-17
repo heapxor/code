@@ -7,9 +7,10 @@ from pyes import ES
 
 
 #change to thrift
-iconn = ES(['cvut3.centrum.cz:9200', 'cvut4.centrum.cz:9200', 'cvut5.centrum.cz:9200', 'cvut6.centrum.cz:9200'], 
+iconn = ES(['cvut3.centrum.cz:9500', 'cvut4.centrum.cz:9500', 'cvut5.centrum.cz:9500', 'cvut6.centrum.cz:9500'], 
            timeout=4, max_retries=30, bulk_size=400)
 _indexName = 'archive'
+
 
 """
 curl -XPUT 'http://cvut4.centrum.cz:9200/archive/' -d '{
@@ -37,7 +38,7 @@ def createIndex():
                         u'inbox': {'type': u'string', 'index': 'not_analyzed'},
                         u'from':{'type': u'string'},
                         u'subject':{'type': u'string'},
-                        u'date':{'type': u'string'},
+                        u'date':{'type': u'date'},
                         u'messageID':{'type': u'string', 'index': 'not_analyzed'},
                         u'attachments':{'type': u'string'},
                         u'size':{'type': u'long', 'index': 'not_analyzed'},
@@ -66,12 +67,13 @@ def createIndex():
 
 def indexEmailData(data, _id):
 
-    iconn.index(data, _indexName, "email", _id)
+    iconn.index(data, _indexName, "email", _id, bulk=True)
+    iconn.flush()
 
 def indexEnvelopeData(data, _id):    
     
-    iconn.index(data, _indexName, "envelope", _id)    
-    
+    iconn.index(data, _indexName, "envelope", _id, bulk=True)    
+    iconn.flush()
 #    
 def main():
     
