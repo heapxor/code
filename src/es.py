@@ -7,7 +7,8 @@ from pyes import ES
 
 
 #change to thrift
-iconn = ES(['cvut6.centrum.cz:9200'], timeout=4, max_retries=30, bulk_size=400)
+iconn = ES(['cvut3.centrum.cz:9200', 'cvut4.centrum.cz:9200', 'cvut5.centrum.cz:9200', 'cvut6.centrum.cz:9200'], 
+           timeout=4, max_retries=30, bulk_size=400)
 _indexName = 'archive'
 
 """
@@ -67,11 +68,9 @@ def indexEmailData(data, _id):
 
     iconn.index(data, _indexName, "email", _id)
 
-def indexEnvelopeData(data, _id):
+def indexEnvelopeData(data, _id):    
     
-    
-    iconn.index(data, _indexName, "envelope", _id)
-    
+    iconn.index(data, _indexName, "envelope", _id)    
     
 #    
 def main():
