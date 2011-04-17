@@ -1,12 +1,17 @@
-from emailParser import parseEmail
 import celery, sys
+import hashlib
+#sys.path.insert(0, '/usr/local/mailman/bin'
+
+
 from emailReader import rawEmail
 from celery import current_app
 from celery.task import task
-import hashlib
 from celery.task.control import rate_limit
-
+from emailParser import parseEmail
 from eventlet import monkey_patch
+
+
+
 
 monkey_patch()
 
