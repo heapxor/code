@@ -2,6 +2,7 @@
 
 ##################################
 ## TODO:
+##     key name (for email) not whole path...
 ##     folding in get_content_type
 ##     data expiration (?)
 ##     write attachments data after check that email is not bad
@@ -24,6 +25,7 @@ import hashlib
 #import StringIO
 from email.errors import NoBoundaryInMultipartDefect
 
+import es
 #from email.Iterators import _structure
 #from email.iterators import body_line_iterator
 #from email.utils import parseaddr
@@ -55,6 +57,45 @@ class BufferedData():
         self.lines.append(line)
 
 ###############################################################################
+
+
+def elasticNotMime(metaData, body):
+    
+    
+    
+    
+    
+    data = dict(inbox=inbox,
+                from=from,
+                subject=subject,
+                date=date,
+                messageID=messageId,
+                attachments=attchs,
+                size=size,
+                body=body)
+    return data
+
+def elasticEnvelope(envelope):
+        
+    fields = envelope.split('\t')
+    
+    #???by qmail-scanner documantation - second field should be qmila-scanner[PID]     
+    #5 (envelope sender)
+    #6 (envelope recipient)    
+    sender = fields[4]
+    recipient = fields[5]
+    
+    #2 IP address.. Clear:RC:1(88.208.65.55):    
+    ip = fields[1][fields[1].find('(')+1 : fields[1].find(')')]
+    
+    
+    data = dict(sender=sender, 
+                recipient=recipient,
+                ip=ip)
+    
+    return data
+
+
 def rawHeader(key, msg):
     header = []
     
@@ -344,6 +385,10 @@ def mimeEmail(key, f, msg, envelope, size):
         if ret:
             (body, attach) = ret
             #print attach
+            
+            emailData = elasticNotMime(metaData, body)
+            envData = elasticEnvelope(envelope)
+            
             cass.writeMetaData(key, envelope, header, size, metaData, attach)    
             cass.writeContent(key, body)
 
@@ -366,10 +411,15 @@ def rawEmail(key, f, msg, envelope, size):
     body = rawBody(key, f)
     metaData = getMetaData(msg)        
 
+    emailData = elasticNotMime(metaData, body)
+    envData = elasticEnvelope(envelope)
        
     cass.writeMetaData(key, envelope, header, size, metaData, [])
     cass.writeContent(key, body)
 
+    es.indexEmailData(emailData, key)
+    es.indexEnvelopeData(envData, key)
+    
 ##############################################################################
 
 
