@@ -38,7 +38,7 @@ def createIndex():
                         u'inbox': {'type': u'string', 'index': 'not_analyzed'},
                         u'from':{'type': u'string'},
                         u'subject':{'type': u'string'},
-                        u'date':{'type': u'date'},
+                       u'date':{'type': u'date'},
                         u'messageID':{'type': u'string', 'index': 'not_analyzed'},
                         u'attachments':{'type': u'string'},
                         u'size':{'type': u'long', 'index': 'not_analyzed'},

@@ -24,6 +24,7 @@ import time
 import hashlib
 #import StringIO
 from email.errors import NoBoundaryInMultipartDefect
+from email.utils import parseaddr
 
 import es
 #from email.Iterators import _structure
@@ -200,9 +201,12 @@ def getMetaData(msg):
     
     if eFrom == None:
         eFrom = ''
-
+    else: 
+        eFrom = parseaddr(eFrom)[1]
+        
     #Date field in email header is mandatory by RFC2822
     #format: Fri, 18 Mar 2011 16:30:00 +0000
+    #??? from email lib use parsedate
     date = msg.get('Date')
     if date == None:
         date = ''
@@ -511,6 +515,7 @@ def parseEmail(emailFile):
     envelope = env.readline()
     env.close()
 
+    #get from Envelope
     size = os.path.getsize(emailFile)
 
     try:  
