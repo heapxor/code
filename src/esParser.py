@@ -1,11 +1,6 @@
 import sys
 import email
-
-import os
 import time
-import hashlib
-#import StringIO
-import emailParser
 
 from emailParser import getMetaData
 from emailParser import createKey
@@ -50,8 +45,6 @@ def elasticEmail(envelope, metaData, attchs, body):
     
     attchList += "]"
     
-    #print attchList
-    
     data = dict(inbox=inbox,
                 subject=subject,
                 date=date,
@@ -64,7 +57,7 @@ def elasticEmail(envelope, metaData, attchs, body):
     
     return data
 
-
+#
 def getBody(msg):
     
     body = []
@@ -79,24 +72,24 @@ def getBody(msg):
             if charset:
                 charset = quote(charset)
             else:
-                charset = quote('us-ascii')
-               
+                charset = quote('utf-8')
+
+            #create unicode representation of DATA
             body.append(part.get_payload().decode(charset, 'ignore'))
            
         if (part.get_content_type() != 'text/plain' and part.get_content_type() != 'text/html' and
             part.get_content_maintype() != 'multipart' and part.get_content_maintype() != 'message' and 
             part.get_content_type() != 'message/rfc822'):
             
-            #???fix name
-            try:                            
-                fileName = str(part.get_filename())                
-            except UnicodeEncodeError:                
-                fileName = part.get_filename().encode('utf8')
+            fileName = part.get_filename(None)
             
+            if fileName == None:
+                fileName = ''
+
             attchs.append(fileName)
             
-    body = ''.join(body)
         
+    body = ''.join(body)
     #print body.encode('iso-8859-2',  'ignore' )
     
     return (body, attchs)
@@ -120,7 +113,6 @@ def elasticEnvelope(envelope):
     
     return data
 
-
 #
 def mimeEmail(msg, envelope, metaData):
     
@@ -138,7 +130,7 @@ def rawEmail(msg, envelope, metaData):
     if charset:
         charset = quote(charset)
     else:
-        charset = quote('us-ascii')
+        charset = quote('utf-8')
                
     body = msg.get_payload().decode(charset, 'ignore')
     
@@ -175,9 +167,7 @@ def parseEmail(emailFile):
     
     key = createKey(metaData[0], envelope)
     envData = elasticEnvelope(envelope)
-    
-    print data
-    print key
+
     #write data into ES
     es.indexEmailData(data, key)
     es.indexEnvelopeData(envData, key)

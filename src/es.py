@@ -27,15 +27,16 @@ def createIndex():
     #_indexType = 'email'
     status = None
     try:
-        status = iconn.status(_indexName)  
+        status = iconn.status(_indexName+'a')  
     except:
         #put the shards/replicas into creation... ?
-        iconn.create_index(_indexName)
+        #iconn.create_index(_indexName)
         
-        #date string or DATE type?
-        mappingsEmail = {
+        #date string or DATE type
+        #inbox shouldnt by analyzed -- but bug X-VF-Scanner-Rcpt-To, 'index': 'not_analyzed'
+	mappingsEmail = {
                              
-                        u'inbox': {'type': u'string', 'index': 'not_analyzed'},
+                        u'inbox': {'type': u'string'},
                         u'from':{'type': u'string'},
                         u'subject':{'type': u'string'},
                        u'date':{'type': u'date'},

@@ -18,15 +18,15 @@
 
 import sys
 import email
-import cass
+#import cass
 import os
 import time
 import hashlib
 #import StringIO
 from email.errors import NoBoundaryInMultipartDefect
 from email.utils import parseaddr
-
-import es
+from email.header import decode_header
+from email.utils import quote
 #from email.Iterators import _structure
 #from email.iterators import body_line_iterator
 #from email.utils import parseaddr
@@ -214,8 +214,22 @@ def getMetaData(msg):
     subject = msg.get('Subject')
     if subject == None:
         subject = '' 
+    else:
+        subject = decode_header(subject)
+        usubject = ''
+        
+        for part in subject:
+
+            data, charSet = part
+
+            if charSet == None:
+                data = data.decode('utf-8', 'ignore')
+            else:
+                data = data.decode(charSet)
+                
+                usubject += data 
     
-    return (uid, domain, eFrom, subject, date)
+    return (uid, domain, eFrom, usubject, date)
 #    
 def metaAttachment(msg, parentType, boundary, attach ,bSet):
         
