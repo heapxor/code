@@ -141,7 +141,7 @@ def rawEmail(msg, envelope, metaData):
 ##############################################################################
 
 
-def parseEmail(emailFile):
+def parseEmail(emailFile, escon):
     
     start = time.time()
 
@@ -169,8 +169,9 @@ def parseEmail(emailFile):
     envData = elasticEnvelope(envelope)
 
     #write data into ES
-    es.indexEmailData(data, key)
-    es.indexEnvelopeData(envData, key)
+    
+    escon.indexEmailData(data, key)
+    escon.indexEnvelopeData(envData, key)
     
     
     duration = time.time() - start 
@@ -180,11 +181,13 @@ def parseEmail(emailFile):
 #
 def main():
     
+    escon = es.ESload()
+    
     email = sys.argv[1]
     
     start = time.time()
     
-    parseEmail(email)
+    parseEmail(email, escon)
         
     duration = time.time() - start
 

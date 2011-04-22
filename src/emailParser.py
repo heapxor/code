@@ -5,7 +5,7 @@
 ##     folding in get_content_type
 ##     data expiration (?)
 ##     write attachments data after check that email is not bad
-##     
+##     unknown encoding - exception ???for subject..
 ##
 ## FIXED:
 ##    more sophisticated email KEY
