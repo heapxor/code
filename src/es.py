@@ -4,11 +4,15 @@ import time
 from pyes.connection import connect_thread_local
 from pyes import ES
 
+from eventlet import monkey_patch
+
+#monkey_patch()
 
 
 def get_conn():
-    iconn = ES(['cvut3.centrum.cz:9200' ], 
-               timeout=4, max_retries=30, bulk_size=400)
+    #change to thrift
+    iconn = ES(['cvut3:9200', 'cvut4:9200', 'cvut5:9200', 'cvut6:9200', 'cvut7:9200', 'cvut8:9200'], 
+ timeout=13, max_retries=30, bulk_size=50)
     
     return iconn
 
@@ -27,17 +31,17 @@ class ESload():
     def __init__(self):
         self._indexName = 'archive'
         self.iconn = get_conn()
-        
+        self.bulkSize = 0
+
     def createIndex(self):
      
         #_indexType = 'email'
         status = None
         try:
-            #status = self.iconn.status(self._indexName)  
-	    self.iconn.status("a")
+            status = self.iconn.status(self._indexName)  
         except:
             #put the shards/replicas into creation... ?
-            #self.iconn.create_index(self._indexName)
+            #iconn.create_index(_indexName)
             
             #date string or DATE type
             #inbox shouldnt by analyzed -- but bug X-VF-Scanner-Rcpt-To, 'index': 'not_analyzed'
@@ -75,21 +79,28 @@ class ESload():
     
     def indexEmailData(self, data, _id):
     
-        self.iconn.index(data, self._indexName, "email", _id, bulk=True)
-        #self.iconn.flush()
-    
+        self.iconn.index(data, self._indexName, "email", _id)
+        #self.iconn.refresh([self._indexName])
+    	self.bulkSize += 1
+
+	if self.bulkSize == 350:
+	    #self.iconn.refresh([self._indexName])
+	    self.bulkSize = 0
+	    #print self.bulkSize
+
     def indexEnvelopeData(self, data, _id):    
         
-        self.iconn.index(data, self._indexName, "envelope", _id, bulk=True)    
+        self.iconn.index(data, self._indexName, "envelope", _id)    
         #self.iconn.flush()
+	#self.iconn.refresh([self._indexName])
+
     #    
     def main(self):
         
         print 'ES pow!'
-	self.createIndex()
-     
-
+        self.createIndex()
+        
+"""
 if __name__ == '__main__':
-    cEs = ESload()
-    cEs.main()
-
+    main()
+"""

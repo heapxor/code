@@ -7,6 +7,10 @@ from emailParser import createKey
 from email.errors import NoBoundaryInMultipartDefect
 from email.utils import quote
 import es
+from eventlet import monkey_patch
+
+#monkey_patch()
+
 
 
 def elasticEmail(envelope, metaData, attchs, body):
@@ -26,7 +30,7 @@ def elasticEmail(envelope, metaData, attchs, body):
     #Date from email header - analyze it?
     #date = metaData[4]
     
-    #date from envelope
+    #date from envelope -> new code in email parser
     #"2009-11-15T14:12:12",
     date = fields[0]
     d = time.strptime(date, "%a, %d %b %Y %H:%M:%S %Z")
@@ -44,7 +48,6 @@ def elasticEmail(envelope, metaData, attchs, body):
             attchList += ','
     
     attchList += "]"
-    
     data = dict(inbox=inbox,
                 subject=subject,
                 date=date,
@@ -64,18 +67,30 @@ def getBody(msg):
     attchs = []
     
     for part in msg.walk():
-        
-        if part.get_content_type() == 'text/plain':
-            
-            charset = part.get_param('charset')
-            
-            if charset:
-                charset = quote(charset)
-            else:
-                charset = quote('utf-8')
+       
+	#fix that , now only explicitly contet type text/plain is passed to ES
+	# check for base64 ? to be sure its attch ? --> if none then plain ? 
+       	missing = object()
+	value = part.get('content-type', missing)
 
-            #create unicode representation of DATA
-            body.append(part.get_payload().decode(charset, 'ignore'))
+	if value is not missing:
+
+            if part.get_content_type() == 'text/plain':
+             
+                charset = part.get_param('charset')
+            
+                if charset:
+                    charset = quote(charset)
+                else:
+                    charset = quote('utf-8')
+	
+	    
+                #create unicode representation of DATA
+	        try:
+                    body.append(part.get_payload().decode(charset, 'ignore'))
+                except LookupError:
+                    body = part.get_payload().decode('utf-8', 'ignore')
+	        
            
         if (part.get_content_type() != 'text/plain' and part.get_content_type() != 'text/html' and
             part.get_content_maintype() != 'multipart' and part.get_content_maintype() != 'message' and 
@@ -85,7 +100,22 @@ def getBody(msg):
             
             if fileName == None:
                 fileName = ''
+	    try:
+                [(data,charSet)] = decode_header(fileName)
 
+                if charSet == None:
+                    data = data.decode('utf-8', 'ignore')
+                else:
+                    try:
+                        data = data.decode(charSet, 'ignore')
+                    except:
+                        data = ''
+
+                fileName = data
+
+            except:
+                fileName=''
+	
             attchs.append(fileName)
             
         
@@ -114,12 +144,18 @@ def elasticEnvelope(envelope):
     return data
 
 #
-def mimeEmail(msg, envelope, metaData):
+def mimeEmail(msg, envelope, metaData, ff):
     
     (body, attchs) = getBody(msg)
     
     data = elasticEmail(envelope, metaData, attchs, body)
     
+    #print 'BODY:' + str(len(body))
+    """
+    if len(body) > 100000:
+        print 'SIZE!!' + str(ff)
+    """
+    #print body
     return data
 
 def rawEmail(msg, envelope, metaData):
@@ -131,9 +167,16 @@ def rawEmail(msg, envelope, metaData):
         charset = quote(charset)
     else:
         charset = quote('utf-8')
-               
-    body = msg.get_payload().decode(charset, 'ignore')
     
+    try:
+        body = msg.get_payload().decode(charset, 'ignore')
+    except LookupError:
+    	body = msg.get_payload().decode('utf-8', 'ignore')
+    """
+    #print 'BODY:' + str(len(body))
+    if len(body) > 100000:
+       print 'SIZE!!'
+    """
     data = elasticEmail(envelope, metaData, [], body)
     
     return data
@@ -141,8 +184,10 @@ def rawEmail(msg, envelope, metaData):
 ##############################################################################
 
 
-def parseEmail(emailFile, escon):
-    
+def parseEmail(emailFile):
+
+    escon = es.ESload()
+
     start = time.time()
 
     f = open(emailFile, 'r')
@@ -157,22 +202,21 @@ def parseEmail(emailFile, escon):
     
     try:  
         if msg.is_multipart():
-            data = mimeEmail(msg, envelope, metaData)
+            data = mimeEmail(msg, envelope, metaData, emailFile)
         else:
             data = rawEmail(msg, envelope, metaData)
         
     except NoBoundaryInMultipartDefect:
-        data = rawEmail(msg, envelope, metaData)
+        data = rawEmail(msg, envelope, metaData, emailFile)
     
     
     key = createKey(metaData[0], envelope)
     envData = elasticEnvelope(envelope)
 
     #write data into ES
-    
     escon.indexEmailData(data, key)
     escon.indexEnvelopeData(envData, key)
-    
+     
     
     duration = time.time() - start 
    
@@ -187,7 +231,7 @@ def main():
     
     start = time.time()
     
-    parseEmail(email, escon)
+    parseEmail(email,)
         
     duration = time.time() - start
 

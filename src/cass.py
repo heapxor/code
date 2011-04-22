@@ -1,7 +1,6 @@
 #################
 ###TODO: 
-### Attachment 0 column - number of links
-### SHA1 theory 
+### Attachment: 0. column { number of links pointing on attch} 
 ### insert (TTL for how long we are storing data?)
 ###
 ### FIXED:
@@ -24,11 +23,15 @@ create keyspace emailArchive with
 use emailArchive;
 
 create column family messagesMetaData with comparator=UTF8Type and memtable_throughput=64 
-    and keys_cached = 0 and key_cache_save_period = 0;
+    and keys_cached = 0 and key_cache_save_period = 0
+    and column_metadata=[{ column_name: subject, validation_class:UTF8Type}];
+    
 create column family messagesContent with memtable_throughput=64 
     and keys_cached = 0 and key_cache_save_period = 0;
+    
 create column family messagesAttachment with memtable_throughput=64 and 
     keys_cached = 0 and key_cache_save_period = 0;
+    
 create column family lastInbox with comparator=TimeUUIDType and memtable_throughput=64 and 
     keys_cached = 0 and key_cache_save_period = 0;
 
@@ -38,25 +41,25 @@ update column family  messagesMetaData with column_metadata=[{column_name: uid, 
  
 """
 
-import datetime, StringIO
+import StringIO
 import logging
 import pycassa
-
 from datetime import datetime
 from pycassa.cassandra.ttypes import ConsistencyLevel
 from pycassa.batch import Mutator
 from pycassa.cassandra.ttypes import NotFoundException
 #from pycassa.columnfamily import gm_timestamp
-from eventlet import monkey_patch
+
+#from eventlet import monkey_patch
 
 
 #__all__ = ['save_header']
 
 """
- data inserter and reader from cassandra
+ data inserter and reader for cassandra DB
 """
 
-monkey_patch()
+#monkey_patch()
 
 """
 log = pycassa.PycassaLogger()
@@ -65,11 +68,11 @@ log.set_logger_level('debug')
 log.get_logger().addHandler(logging.FileHandler('/home/lenart/src/py.log'))
 """
 
-
 pool = pycassa.ConnectionPool(keyspace='emailArchive',
-server_list=['cvut3:9160', 'cvut4:9160', 'cvut5:9160', 'cvut7:9160', 'cvut8:9160'], prefill=False, pool_size=15, 
-    max_overflow=10, max_retries=-1, timeout=5, pool_timeout=200)
+server_list=['cvut3:9160', 'cvut4:9160', 'cvut5:9160', 'cvut7:9160', 'cvut8:9160'], 
+    prefill=False, pool_size=15, max_overflow=10, max_retries=-1, timeout=5, pool_timeout=200)
 
+#data integrity is 1. priority -> QUORUM
 batch = Mutator(pool, queue_size=50, write_consistency_level=ConsistencyLevel.QUORUM)
 
 messagesMetaData = pycassa.ColumnFamily(pool, 'messagesMetaData',
@@ -88,37 +91,47 @@ write_consistency_level=ConsistencyLevel.QUORUM, read_consistency_level=Consiste
 #################
 # INSERTING APIs
 #
-def writeMetaData(key, envelope, header, size, metaData, attachments):  
-#metadata (uid, domain, eFrom, subject, date)
-#(name, size, hash)
-        
+
+# write MetaData    
+def writeMetaData(key, metaData, statData, attachments):
+#metaData: (uid, domain, headerFrom, usubject, headDate)  #
+#statData: (time, size, spam, sender, recipient, envDate) #
+            
+    #FIX: if field is empty - doesnt create column for it...?
     batch.insert(messagesMetaData, key, { 'uid': metaData[0],
                                           'domain': metaData[1],
-                                          'envelope': envelope,
-                                          'header': header,
                                           'from': metaData[2],
-                                          'subject': metaData[3], #??? FIX
-                                          'date': metaData[4],
-                                          'size': str(size),
-                                          'attachments': str(len(attachments))
+                                          'subject': metaData[3], #Unicode utf-8
+                                          'hDate': metaData[4],
+                                          
+                                          'time': statData[0],
+                                          'size': statData[1],
+                                          'spam': statData[2],
+                                          'sender': statData[3],
+                                          'recipient': statData[4],
+                                          'eDate': statData[5]
                                         })
     
+    
     if len(attachments) != 0:
+        
+        batch.insert(messagesMetaData, key, { 'attachments': str(len(attachments)) })
+        
         i=0
         for attch in attachments:
-            #fill with zeros because of column sorting (UTF8) and for fetching attachments in AttachHash() 
+            #fill with zeros because of column sorting is UTF-8 and for fetching attachments in AttachHash() 
             fhash = 'a' + str(i).zfill(3)
             fname = 'b' + str(i).zfill(3)
             fsize = 'c' + str(i).zfill(3)
-    
-            batch.insert(messagesMetaData, key, {fhash: str(attch[2])})
-            batch.insert(messagesMetaData, key, {fname: str(attch[0])})
+            
+            #attachment: (name, size, hash)
+            batch.insert(messagesMetaData, key, {fhash: attch[2]})
+            batch.insert(messagesMetaData, key, {fname: attch[0]})
             batch.insert(messagesMetaData, key, {fsize: str(attch[1])})
 
             i = i + 1
 
-
-    #print messagesMetaData.get(key)
+    #TODO:
     #top100msgs
     #####################
     #get it from msg date
@@ -132,39 +145,43 @@ def writeMetaData(key, envelope, header, size, metaData, attachments):
 def splitter(l, n):
     i = 0
     chunk = l[:n]
+    
     while chunk:
         yield chunk
         i += n
         chunk = l[i:i+n]
 #
 # write chunks into DB
-def chunkWriter(key, data, cf):    
+def chunkWriter(key, data, cf, i):    
     #chunk size 512KB
     chunkSize = 524288
     
-    i = 0
-    
     for chunk in splitter(data, chunkSize):
         id = str(i)
+        
         batch.insert(cf, key, { id : chunk })
+        batch.send()
+        
         i += 1
-
-    batch.send()
     
 #
-# write body into DB
-def writeContent(key, body):
+# write envelope, header and body into DB
+def writeContent(key, envelope, header, body):
+    
+    messagesContent.insert(key, {'0': envelope})
+    messagesContent.insert(key, {'1': header})
+    
     """
     Save raw body
-    if body size > 1MB do bulk write
+    if body size > 1MB then write in chunks
     """
-    
     bodySize = len(body) / 1024
     
-    if bodySize >  1024:
-        chunkWriter(key, body, messagesContent)
+    if bodySize > 1024:
+        chunkWriter(key, body, messagesContent, 2)
     else:
-        messagesContent.insert(key, {'0': body})
+        messagesContent.insert(key, {'2': body})
+        
 #
 # write attachment data in chunks
 # do de-duplication if data actually exist in DB    
@@ -180,15 +197,16 @@ def writeAttachment(mHash, data):
         stat = 1
         
         if dataSize > 1024:
-            chunkWriter(mHash, data, messagesAttachment)
+            chunkWriter(mHash, data, messagesAttachment, 1)
         else:
-            messagesAttachment.insert(mHash, {'0': data})
+            messagesAttachment.insert(mHash, {'1': data})
     
     #debug info
     if stat == 0:
+        #TODO: increment 'link number' for column '0'
+        messagesAttachment.insert(mHash, {'0': '0'})
         print 'INFO: [deduplication in effect]'
             
-
 
 ################
 # READING APIs
@@ -210,45 +228,62 @@ def emailCheck(key):
 # get short email info (for email client)
 def getEmailInfo(key):
     
-    ret= messagesMetaData.get(key, columns= [
+    ret = messagesMetaData.get(key, columns= [
                                              'from', 
                                              'subject',
-                                             'date',
-                                             'size',
-                                             'attachments'
+                                             'hDate',
+                                             'size'                                             
                                              ])
+    
+    try:
+        attchs = messagesMetaData.get(key, columns=['attachments'])
+        attchs = attchs['attachments']
+    except NotFoundException:
+        attchs = 0
+        
+    ret['attachments'] = str(attchs)
+    
     
     return ret
 
 # return email raw header
 def getRawHeader(key):
         
-    ret= messagesMetaData.get(key, columns= ['header'])
+    ret= messagesContent.get(key, columns= ['1'])
     
-    return ret['header']
+    return ret['1']
 
 # return #attachments of email 
 def getMimeInfo(key):
     
-    attch = messagesMetaData.get(key, columns= ['attachments'])  
-    
-    return int(attch['attachments'])
+    try:
+        attch = messagesMetaData.get(key, columns= ['attachments'])
+        attch = int(attch['attachments'])
+    except NotFoundException:
+        attch = 0
+        
+        
+    return attch
 
 # return email raw body (if size of body >1MB then it is stored in chunks) 
 def getRawBody(key):
     
-    columnsNumb =  messagesContent.get_count(key)
+    columnsTotal =  messagesContent.get_count(key)
+    parts = columnsTotal - 2
     
-    body = messagesContent.get(key, column_count = columnsNumb)
+    body = messagesContent.get(key, column_count = parts, column_start='2', column_finish='')
     
     nBody = []
     
     #join chunks
-    for part in range(columnsNumb):
+    for part in range(2, columnsTotal):
         nBody.append(body[str(part)])
-
     
-    return ''.join(nBody)
+    
+    body = ''.join(nBody)
+    
+    
+    return body
 
 # return list of attachments with their hashes
 def getAttachHash(key, numbAttchs):
@@ -259,24 +294,25 @@ def getAttachHash(key, numbAttchs):
    
     attchHashList =[]
     
-    
     for k, attch in attchs.iteritems():
         attchHashList.append('DEDUPLICATION:' + attch)
     
     
     return attchHashList 
 
+#
 # return data of attachment    
 def getAttachData(key):
     
-    parts = messagesAttachment.get_count(key)
+    columnsTotal = messagesAttachment.get_count(key)
+    parts = columnsTotal - 1
    
     #att= {}
-    att = messagesAttachment.get(key, column_count=parts)
+    att = messagesAttachment.get(key, column_count=parts, column_start='1', column_finish='')
     
     nAtt = []
     #join chunks of attachment data
-    for part in range(parts):
+    for part in range(1, columnsTotal):
         nAtt.append(att[str(part)])
 
     data = ''.join(nAtt)

@@ -9,7 +9,6 @@ import sys
 import email
 import cass
 import hashlib 
-
 from cass import emailCheck
 
 
@@ -24,7 +23,7 @@ def infoEmail(key):
         data = cass.getEmailInfo(key)
     
         #what about data.keys() ?
-        print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['date'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + data['attachments']   
+        print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['hDate'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + data['attachments']   
     
 #
 # raw email
@@ -35,8 +34,7 @@ def rawEmail(key):
         #return 'Email is not in the DB'
         return 0
     else:    
-        header = cass.getRawHeader(key)
-        
+        header = cass.getRawHeader(key)        
         #mime or not mime email
         mime = cass.getMimeInfo(key)
         
@@ -49,7 +47,7 @@ def rawEmail(key):
             body = cass.getMimeBody(key, mime)
 
         return header + body
-
+        
 #
 def attachEmail(key):
     

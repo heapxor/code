@@ -2,10 +2,10 @@
 
 ##################################
 ## TODO:
+##     data expiration
 ##     folding in get_content_type
-##     data expiration (?)
-##     write attachments data after check that email is not bad
-##     unknown encoding - exception ???for subject..
+##     write attachments data after check that email is not bad / unimportant...
+##     
 ##
 ## FIXED:
 ##    more sophisticated email KEY
@@ -18,20 +18,20 @@
 
 import sys
 import email
-#import cass
-import os
+import cass
 import time
 import hashlib
-#import StringIO
 from email.errors import NoBoundaryInMultipartDefect
 from email.utils import parseaddr
 from email.header import decode_header
-from email.utils import quote
+from email.utils import mktime_tz
+from email.utils import formatdate
+from email.utils import parsedate_tz
+from time import strptime
 #from email.Iterators import _structure
 #from email.iterators import body_line_iterator
 #from email.utils import parseaddr
 #from email.utils import getaddresses
-
 
 class BufferedData():
     
@@ -42,9 +42,7 @@ class BufferedData():
             
     def readline(self):        
         if not self.lines:
-            line = self.f.readline()
-            #line = line.replace('\r\n', '\n').replace('\r', '\n')
-       
+            line = self.f.readline()       
         else:
             line = self.lines.pop(0)
         
@@ -58,59 +56,17 @@ class BufferedData():
         self.lines.append(line)
 
 ###############################################################################
-
-
-def elasticEmail(envelope, metaData, attchs, body):
-#metaData: (uid, domain, eFrom, subject, date)    
+#
+#statistical data (for MAPREDUCE)
+#
+#   ret:
+#       time, size, spam, sender, recipient, envDate #
+def getStatsData(envelope):
     
-    #8 Message-ID
-    #4 Raw size of message
     fields = envelope.split('\t')
-    messageId = fields[7].strip('<>')
-    rawSize = fields[3]
-
-    inbox = metaData[0]
-    eFrom = metaData[2]
-    #??? encode it somehow
-    subject = metaData[3]
     
-    #Date from email header - analyze it?
-    #date = metaData[4]
-    
-    #date from envelope
-    #"2009-11-15T14:12:12",
-    date = fields[0]
-    d = time.strptime(date, "%a, %d %b %Y %H:%M:%S %Z")
-    date = str(d.tm_year) + "-" + str(d.tm_mon) + "-" + str(d.tm_mday) + "T" + str(d.tm_hour) + ":" + str(d.tm_min) + ":" + str(d.tm_sec)    
-    
-    
-    
-    #attachments list
-    attchList = "["
-    i = 0
-    for att in attchs:
-        attchList +=  '"' + att[2] + '"'
-        i += 1
-        if i < len(attchs):
-            attchList += ','
-    attchList += "]"
-    
-    
-    data = dict(inbox=inbox,
-                subject=subject,
-                date=date,
-                messageID=messageId,
-                attachments=attchList,
-                size=rawSize,
-                body=body)
-    
-    data['from'] = eFrom
-    
-    return data
-
-def elasticEnvelope(envelope):
-        
-    fields = envelope.split('\t')
+    time = fields[2]
+    size = fields[3]
     
     #???by qmail-scanner documantation - second field should be qmila-scanner[PID]     
     #5 (envelope sender)
@@ -118,17 +74,26 @@ def elasticEnvelope(envelope):
     sender = fields[4]
     recipient = fields[5]
     
-    #2 IP address.. Clear:RC:1(88.208.65.55):    
-    ip = fields[1][fields[1].find('(')+1 : fields[1].find(')')]
+    idx = fields[1].find('SA:')
+    
+    if idx == -1:
+        spamFlag = '0' 
+    else:
+        spamFlag = fields[1][idx+3]
+    
+    #date from envelope
+    #"2009-11-15T14:12:12",
+    date = fields[0]    
+    d = strptime(date, "%a, %d %b %Y %H:%M:%S %Z")
+    date = str(d.tm_year) + "-" + str(d.tm_mon) + "-" + str(d.tm_mday) + "T" + str(d.tm_hour) + ":" + str(d.tm_min) + ":" + str(d.tm_sec)    
     
     
-    data = dict(sender=sender, 
-                recipient=recipient,
-                ip=ip)
+    return (time, size, spamFlag, sender, recipient, date)
     
-    return data
 
 #
+# key = sha256(uid + messageId + date)
+# uid is inbox name (jan@mak.com)
 def createKey(uid, envelope):
     
     fields = envelope.split('\t') 
@@ -140,12 +105,12 @@ def createKey(uid, envelope):
 
     #YearMonthDayHourMinSec
     date = str(d.tm_year) + str(d.tm_mon) + str(d.tm_mday) + str(d.tm_hour) + str(d.tm_min) + str(d.tm_sec)    
-    data = uid + messageId
+    data = uid + messageId + date
     
-    m = hashlib.sha1()      
+    m = hashlib.sha256()      
     m.update(data)
     
-    key = m.hexdigest() + date
+    key = m.hexdigest()
         
     
     return key
@@ -183,54 +148,82 @@ def rawBody(email):
     body = ''.join(body)
     
     return body
-#    
+
+#
+# ret:
+#     uid, (jan@mak.com)
+#     domain name from uid  (mak.com)
+#     from, subject, date fields from email HEADER
+#
+# - used by esParse
 def getMetaData(msg):    
+    
+    #TODO: normally its in envelope
     #the real recipient is in the email header, because of tapping
     #X-VF-Scanner-Rcpt-To: x@y
-    #TODO:??? normally its in envelope
     uid = msg.get('X-VF-Scanner-Rcpt-To')
     
+    #because of ...
     if uid == None:
         uid = 'charvat@cvut1.centrum.cz'
+     
     
-    #TODO:??? whats the domain format, fix for fulltext? 
     domain = uid.partition('@')[2]
 
-    #From field in email header is mandatory by RFC2822
-    eFrom = msg.get('From')
+    #'From' field in email header is mandatory by RFC2822
+    headerFrom = msg.get('From')
     
-    if eFrom == None:
-        eFrom = ''
+    if headerFrom == None:
+        headerFrom = ''
     else: 
-        eFrom = parseaddr(eFrom)[1]
+        headerFrom = parseaddr(headerFrom)[1]
         
     #Date field in email header is mandatory by RFC2822
-    #format: Fri, 18 Mar 2011 16:30:00 +0000
-    #??? from email lib use parsedate
+    #format: Fri, 18 Mar 2011 16:30:00 +0000 (RFC2822)
     date = msg.get('Date')
     if date == None:
         date = ''
+    else:    
+        pdate = parsedate_tz(date)
         
-    subject = msg.get('Subject')
-    if subject == None:
-        subject = '' 
-    else:
-        subject = decode_header(subject)
-        usubject = ''
-        
-        for part in subject:
-
-            data, charSet = part
-
-            if charSet == None:
-                data = data.decode('utf-8', 'ignore')
-            else:
-                data = data.decode(charSet)
-                
-                usubject += data 
+        if pdate == None:
+            date  = ''
+        else:
+            date = formatdate(mktime_tz(pdate), usegmt=True)
     
-    return (uid, domain, eFrom, usubject, date)
+    
+    #TODO: set the string + coding (client need it for correct representation...)
+    usubject = ''
+    subject = msg.get('Subject')
+    
+    if subject != None:
+        try:
+            subject = decode_header(subject)
+                    
+            for part in subject:
+                data, charSet = part
+                if charSet == None:
+                    ddata = data.decode('utf-8', 'ignore')
+                else:
+                    try:
+                        ddata = data.decode(charSet, 'ignore')
+                    except:
+                        ddata = data
+              
+                usubject += ddata 
+  
+        except:
+            usubject=subject
+ 
+    
+    #usubject is UNICODE     
+    return (uid, domain, headerFrom, usubject, date)
 #    
+# meta information about attachments
+# ret :
+#    boundary for attachment
+#    content type of attachment
+#    attachment name (filename)
 def metaAttachment(msg, parentType, boundary, attach ,bSet):
         
     if msg.is_multipart():
@@ -249,12 +242,24 @@ def metaAttachment(msg, parentType, boundary, attach ,bSet):
             msg.get_content_type() != 'message/rfc822'):
                 
         boundary = '--' + boundary
-              
-        try:                            
-            fileName = str(msg.get_filename())                
-        except UnicodeEncodeError:                
-            fileName = msg.get_filename().encode('utf8')
         
+        #returns unicode string
+        fileName = msg.get_filename(None)
+        
+        if fileName == None:
+            fileName = ''
+        else:            
+            if type(fileName) is unicode:
+                fileName = fileName.encode('utf8', 'ignore')
+                
+                
+            """          
+            try:
+                fileName = str(msg.get_filename())                
+            except UnicodeEncodeError:                
+                fileName = msg.get_filename().encode('utf8', 'ignore')
+            """
+
         
         if parentType.lower() == 'message/rfc822':
             attach.append((boundary, parentType, fileName))
@@ -262,13 +267,12 @@ def metaAttachment(msg, parentType, boundary, attach ,bSet):
             attach.append((boundary, msg.get_content_type(), fileName))        
 #        
 def writeAttachment(data):
-    
-    #??? for sure sha1
-    m = hashlib.sha1()      
+        
+    m = hashlib.sha256()      
     m.update(data)
     key = m.hexdigest()
     
-    ###cass.writeAttachment(key, data)                                 
+    cass.writeAttachment(key, data)                                 
     
     return key 
 #
@@ -297,14 +301,9 @@ def newRawBody(key, f, attachments, bSet):
         if stat == 6:
             #print 'Stat:6'
             body.append(line)
-            
-            #if attchWritten > 2 and bound[2] == '08022011222.jpg':
-                #print '>>>>' + line,
                 
             if attachments and line[0:len(line) - 1] == attachments[0][0]:                        
                 #possible attach boundary        
-                #attachments.pop(0)      
-                #print line      
                 bound = attachments[0]                
                 stat = 1
                                   
@@ -320,7 +319,7 @@ def newRawBody(key, f, attachments, bSet):
                     #possible folding in header field
                     
                     line = buff.readline()
-                    #print repr(line[0]),
+            
                     if line[0] == '\t' or line[0] == ' ':
                         body.append(line)
                                 
@@ -342,11 +341,9 @@ def newRawBody(key, f, attachments, bSet):
         elif stat == 2:   
             #print "Stat:2" 
             boundaryHeader = 0
-            #???
-            if line == '\n' or line == '\r\n' or line == '\r':
-                #print repr(line)
+            
+            if line == '\n' or line == '\r\n' or line == '\r':            
                 buff.fakeNewLine(line)
-                #print buff.newlineStack
                 stat = 3                
             elif line[0:len(line)-1] in bSet:
                 buff.unreadline(line)
@@ -361,7 +358,6 @@ def newRawBody(key, f, attachments, bSet):
 
             if line == '\n' or line == '\r\n' or line == '\r':
                 buff.fakeNewLine(line)
-                #print buff.newlineStack
             elif line[0:len(line)-1] in bSet:
                 buff.unreadline(line)
                 stat = 4
@@ -369,8 +365,7 @@ def newRawBody(key, f, attachments, bSet):
             else: #text  
                 stat = 2
                          
-            if stat == 2 or stat == 4:        
-                #print 'cistim stack:' + str(len(buff.newlineStack))
+            if stat == 2 or stat == 4:
                 body2 = []
                 for newLine in buff.newlineStack:
                     if stat == 4:                    
@@ -386,18 +381,16 @@ def newRawBody(key, f, attachments, bSet):
             
         elif stat == 4:
             #print "Stat:4"          
-            #ddata = ''.join(data)  
+            
             attKey = writeAttachment(''.join(data))                
             hash = 'DEDUPLICATION:' + attKey + '\n'
             
             body.append(hash)
             
-            #create list of attachmentsData -
-            
+            #create list of attachmentsData -            
             #body.append(''.join(data))
                 
             #(name, size, hash), its metadata for messageMetaData CF
-            #metaData  = (bound[2], len(ddata), attKey)
             metaData  = (bound[2], len(''.join(data)), attKey)
             attchList.append(metaData)
             
@@ -408,25 +401,19 @@ def newRawBody(key, f, attachments, bSet):
                     body.append(newLines)
                                                 
             stat = 6
-            
-            #print 'att written:' + bound[2]
-
-            
+                        
             attchWritten += 1
             attachments.pop(0)
             
             buff.unreadline(line)
             
-            
         elif stat == 5:
-            #print line
             #print 'Stat:5'
             
             body.append(line)
-            #???
+            
             if line == '\n' or line == '\r\n' or line == '\r':
                 stat = 2
-     
                             
     body = ''.join(body)                  
                             
@@ -437,20 +424,21 @@ def newRawBody(key, f, attachments, bSet):
     return (body, attchList)      
 
 #
-def mimeEmail(f, msg, envelope, size):
-         
+def mimeEmail(f, msg, envelope):
+    
+    
     header = rawHeader(f)    
     metaData = getMetaData(msg)  
+    statsData = getStatsData(envelope)
     
     #metaData[0] is uid (inbox)
     key = createKey(metaData[0], envelope)
-
+    print key
     #find attachment's boundary and write attachments
     attachments = []
     bSet = set()
 
     metaAttachment(msg, "", 0, attachments, bSet)
-
     
     if len(attachments) != 0:
         aES = []
@@ -463,59 +451,39 @@ def mimeEmail(f, msg, envelope, size):
         if ret:
             (body, attach) = ret
             
-            envData = elasticEnvelope(envelope)
-            emailData = elasticEmail(envelope, metaData, aES, body)
-            
-            #print envData,
-            #print '>>>'
-            #print emailData,
-            """
-            cass.writeMetaData(key, envelope, header, size, metaData, attach)    
-            cass.writeContent(key, body)
-            """            
-            es.indexEmailData(emailData, key)
-            es.indexEnvelopeData(envData, key)
-            
+            cass.writeMetaData(key, metaData, statsData, attach)    
+            cass.writeContent(key, envelope, header, body)
             
         else:
             print 'Error: Bad email <' + key + '>'
+            #
+            #TODO: write whole email into DB
+            
     #MIME email w/out attachments
     else:        
         body = rawBody(f)
+
+        cass.writeMetaData(key, metaData, statsData, [])    
+        cass.writeContent(key, envelope, header, body)
         
-        envData = elasticEnvelope(envelope)
-        emailData = elasticEmail(envelope, metaData, attachments, body)
-        
-        """
-        cass.writeMetaData(key, envelope, header, size, metaData, [])    
-        cass.writeContent(key, body)        
-        """
-        es.indexEmailData(emailData, key)
-        es.indexEnvelopeData(envData, key)
         
 #        
-def rawEmail(f, msg, envelope, size):
+def rawEmail(f, msg, envelope):
     
     header = rawHeader(f)
     body = rawBody(f)
     metaData = getMetaData(msg)        
+    statsData = getStatsData(envelope)
     
     #metaData[0] is uid (inbox)
     key = createKey(metaData[0], envelope)
-
-    emailData = elasticEmail(envelope, metaData, [], body)
-    envData = elasticEnvelope(envelope)
+    print key
     
-    """
-    cass.writeMetaData(key, envelope, header, size, metaData, [])
-    cass.writeContent(key, body)
-    """
-    es.indexEmailData(emailData, key)
-    es.indexEnvelopeData(envData, key)
+    cass.writeMetaData(key, metaData, statsData, [])    
+    cass.writeContent(key, envelope, header, body)
     
     
 ##############################################################################
-
 
 def parseEmail(emailFile):
     
@@ -529,17 +497,14 @@ def parseEmail(emailFile):
     envelope = env.readline()
     env.close()
 
-    #get from Envelope
-    size = os.path.getsize(emailFile)
-
     try:  
         if msg.is_multipart():
-            mimeEmail(f, msg, envelope, size)
+            mimeEmail(f, msg, envelope)
         else:
-            rawEmail(f, msg, envelope, size)
+            rawEmail(f, msg, envelope)
         
     except NoBoundaryInMultipartDefect:
-        rawEmail(f, msg, envelope, size)
+        rawEmail(f, msg, envelope)
     
 
     f.close()
