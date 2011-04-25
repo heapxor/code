@@ -1,9 +1,10 @@
 #################
 ###TODO: 
-### top100msgs 
+### 
 ### insert (TTL for how long we are storing data?)
 ###
 ### FIXED:
+###    top100 messages per inbox
 ###    increment 'link number' for column '0'
 ###    body/attachment in chunks (512KB)
 ###    inserted into C*
@@ -41,7 +42,6 @@ update column family  messagesMetaData with column_metadata=[{column_name: uid, 
  
  
 """
-
 import StringIO
 import logging
 import pycassa
@@ -97,8 +97,8 @@ write_consistency_level=ConsistencyLevel.QUORUM, read_consistency_level=Consiste
 def writeMetaData(key, metaData, statData, attachments):
 #metaData: (uid, domain, headerFrom, (subject,code), headDate)  #
 #statData: (time, size, spam, sender, recipient, envDate) #
-            
     
+#    print metaData[3]
     subject, code = metaData[3]
     
     #FIX: if field is empty - doesnt create column for it...?
@@ -107,8 +107,7 @@ def writeMetaData(key, metaData, statData, attachments):
                                           'from': metaData[2],
                                           'subject': subject, #UNICODE
                                           'scode' : code,
-                                          'hDate': metaData[4],
-                                          
+                                          'hDate': metaData[4],                                          
                                           'time': statData[0],
                                           'size': statData[1],
                                           'spam': statData[2],
@@ -136,17 +135,22 @@ def writeMetaData(key, metaData, statData, attachments):
 
             i = i + 1
 
-    #TODO:
+    
     #top100msgs
     #####################
-    #get it from envelope - eDate
+    #get it from email header- hDate
     #"2009-11-15T14:12:12"
-    #if from header --- > time = time.mktime(email.utils.parsedate_tz('Sun, 24 Apr 2011 11:55:00 GMT')[:9])
+    #--- > time = time.mktime(email.utils.parsedate_tz('Sun, 24 Apr 2011 11:55:00 GMT')[:9])
     date, time = statData[5].split('T')
     date = date.split('-')
     time = time.split(':')
     
-    time = datetime(date[0], date[1], date[2], time[0], time[1], time[2])
+    time = datetime(int(date[0]),
+    		   	int(date[1]),
+			int(date[2]),
+			int(time[0]),
+			int(time[1]),
+			int(time[2]))
     
     batch.insert(lastInbox, metaData[0], {time: key})
         
@@ -201,22 +205,25 @@ def writeAttachment(mHash, data):
     #KB size
     dataSize = len(data) / 1024    
 
+    #print mHash
     stat = 0
     try:
         messagesAttachment.get(mHash, column_count=1)
     except NotFoundException:
         #>1MB==1024KB
         stat = 1
-        
+
+        messagesAttachment.insert(mHash, {'0': '1'})
+
         if dataSize > 1024:
             chunkWriter(mHash, data, messagesAttachment, 1)
         else:
             messagesAttachment.insert(mHash, {'1': data})
     
-    #debug info
     if stat == 0:
-        link = messagesAttachment.insert(mHash, columns=['0'])
-        link = int(link) + 1        
+        link = messagesAttachment.get(mHash, columns=['0'])
+        link = str(long(link['0']) + 1)        
+        #overflow?
         messagesAttachment.insert(mHash, {'0': link})
         
         print 'INFO: [deduplication in effect]'
@@ -226,24 +233,22 @@ def writeAttachment(mHash, data):
 # READING APIs
 # 
 
-def getInbox(inbox):
+def getInbox(inbox, size):
     
     inbox_expr = create_index_expression('uid', inbox)
-    clause = create_index_clause([inbox_expr,], count=20)
+    clause = create_index_clause([inbox_expr,], count=size)
     
-    for key, data in messagesMetaData.get_indexed_slices(clause):
-        print data['uid'] + ",", data['subject'], data['eDate']
+    data = messagesMetaData.get_indexed_slices(clause)
+    
+    return data
 
-    
-    
-def getTop(key, top):
+def getTop(key, emailCount):
     
     try:
-        data = lastInbox.get(key, column_count=top)
+        data = lastInbox.get(key, column_count=emailCount, column_start='' )
     except NotFoundException:
         data = None
     
-        
     return data
 
 # test if email exist in DB
@@ -266,7 +271,8 @@ def getEmailInfo(key):
                                              'from', 
                                              'subject',
                                              'hDate',
-                                             'size'                                             
+                                             'size',
+					                         'eDate'                                             
                                              ])
     
     try:

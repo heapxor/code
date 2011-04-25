@@ -11,18 +11,29 @@ import cass
 import hashlib 
 from cass import emailCheck
 
+def infoPrint(data):
+   
+    if data.has_key('attachments'):
+	attch = data['attachments']
+    else:
+	attch = '0'
+
+    print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['eDate'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + attch
 
 
-def inbox(key):
+def inbox(inbox):
     
-    
-    
-    
+    size = 35
 
-def top(key):
+    inboxData = cass.getInbox(inbox, size)
+
+    for key, data in inboxData:
+	infoPrint(data)
+
+
+def topEmails(key):
     
-    ret = cass.getTop(key, 10)
-    
+    ret = cass.getTop(key, 20)
     if ret == None:
         print 'Inbox doesnt exist'
     else:
@@ -41,8 +52,8 @@ def infoEmail(key):
         data = cass.getEmailInfo(key)
     
         #what about data.keys() ?
-        print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['hDate'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + data['attachments']   
-    
+   	infoPrint(data)
+ 
 #
 # raw email
 def rawEmail(key):
@@ -90,11 +101,11 @@ def main():
     #elif arg == 'del'  -- how to do deletion??? 
     
     elif arg == 'top':
-        top(key)   
+        topEmails(key)   
     elif arg == 'inbox':
         inbox(key)
-    elif arg == 'domains'
-        domains(key)
+    #elif arg == 'domains'
+    #    domains(key)
     
     else:
         print 'Error: client got bad input parameters'

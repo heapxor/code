@@ -174,7 +174,8 @@ def getMetaData(msg):
     
         if idx != -1:
             uid = uid[:idx]
-         
+     
+    
     domain = uid.partition('@')[2]
 
     #'From' field in email header is mandatory by RFC2822
@@ -201,29 +202,28 @@ def getMetaData(msg):
     
     #TODO: set the string + coding (client need it for correct representation...)
     usubject = ''
+    charSet = 'utf-8'
     subject = msg.get('Subject')
    
+    #gosh! - subject :bytearray!!!!
     if subject != None:
         try:
-            charSet = 'utf-8'
             subject = decode_header(subject)
             
-            [(data, charSet)] = subject
+	    usubject =''
 
-            if charSet == None:
-                usubject = data.decode('utf-8', 'ignore')
-                
-            else:
-                try:
-                    usubject = data.decode(charSet, 'ignore')
-                    subject = (usubject, charSet)
-                    
-                except LookupError:
-                    usubject = data.decode('utf-8', 'ignore')            
+	    for part in subject:
+            	data, charSet = part
+            	usubject += data 
+
+	    
+	    if charSet == None:
+	    	charSet = 'utf-8'
+
         except:
-            usubject = data.decode('utf-8', 'ignore')
+            usubject = subject 
             
- 
+   
     subject = (usubject, charSet)
     #subject is (unicode, code) // code is only for client side purpose       
     return (uid, domain, headerFrom, subject, date)
@@ -433,7 +433,7 @@ def newRawBody(key, f, attachments, bSet):
     return (body, attchList)      
 
 #
-def mimeEmail(f, msg, envelope):
+def mimeEmail(f, msg, envelope, emailFile):
         
     header = rawHeader(f)    
     metaData = getMetaData(msg)  
@@ -460,7 +460,7 @@ def mimeEmail(f, msg, envelope):
             (body, attach) = ret        
             
         else:
-            print 'Error: Bad email <' + key + '>'
+            print 'Error: Bad email <' + emailFile + '>'
             #
             #write whole email into DB
             body = rawBody(f)
@@ -509,7 +509,7 @@ def parseEmail(emailFile):
 
     try:  
         if msg.is_multipart():
-            mimeEmail(f, msg, envelope)
+            mimeEmail(f, msg, envelope, emailFile)
         else:
             rawEmail(f, msg, envelope)
         
