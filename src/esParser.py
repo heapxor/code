@@ -25,7 +25,12 @@ def elasticEmail(envelope, metaData, attchs, body):
     inbox = metaData[0]
     eFrom = metaData[2]
     #??? encode it somehow
-    subject = metaData[3]
+    subject, code = metaData[3]
+    
+    subject = subject.encode(code, 'ignore')
+    #UNICODE - utf-8 (because of ES
+    subject = subject.decode('utf8', 'ignore')
+    
     
     #Date from email header has format: Fri, 09 Nov 2001 01:08:47 GMT (RFC2822)
     #-> transform it into "2009-11-15T14:12:12" for fulltext search 

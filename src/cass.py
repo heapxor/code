@@ -1,9 +1,10 @@
 #################
 ###TODO: 
-### Attachment: 0. column { number of links pointing on attch} 
+### top100msgs 
 ### insert (TTL for how long we are storing data?)
 ###
 ### FIXED:
+###    increment 'link number' for column '0'
 ###    body/attachment in chunks (512KB)
 ###    inserted into C*
 ###    first attch hash lookup -> then insert
@@ -49,7 +50,7 @@ from pycassa.cassandra.ttypes import ConsistencyLevel
 from pycassa.batch import Mutator
 from pycassa.cassandra.ttypes import NotFoundException
 #from pycassa.columnfamily import gm_timestamp
-
+from pycassa.index import *
 #from eventlet import monkey_patch
 
 
@@ -94,14 +95,18 @@ write_consistency_level=ConsistencyLevel.QUORUM, read_consistency_level=Consiste
 
 # write MetaData    
 def writeMetaData(key, metaData, statData, attachments):
-#metaData: (uid, domain, headerFrom, usubject, headDate)  #
+#metaData: (uid, domain, headerFrom, (subject,code), headDate)  #
 #statData: (time, size, spam, sender, recipient, envDate) #
             
+    
+    subject, code = metaData[3]
+    
     #FIX: if field is empty - doesnt create column for it...?
     batch.insert(messagesMetaData, key, { 'uid': metaData[0],
                                           'domain': metaData[1],
                                           'from': metaData[2],
-                                          'subject': metaData[3], #Unicode utf-8
+                                          'subject': subject, #UNICODE
+                                          'scode' : code,
                                           'hDate': metaData[4],
                                           
                                           'time': statData[0],
@@ -134,8 +139,15 @@ def writeMetaData(key, metaData, statData, attachments):
     #TODO:
     #top100msgs
     #####################
-    #get it from msg date
-    time = datetime.utcnow()    
+    #get it from envelope - eDate
+    #"2009-11-15T14:12:12"
+    #if from header --- > time = time.mktime(email.utils.parsedate_tz('Sun, 24 Apr 2011 11:55:00 GMT')[:9])
+    date, time = statData[5].split('T')
+    date = date.split('-')
+    time = time.split(':')
+    
+    time = datetime(date[0], date[1], date[2], time[0], time[1], time[2])
+    
     batch.insert(lastInbox, metaData[0], {time: key})
         
     batch.send()
@@ -203,14 +215,36 @@ def writeAttachment(mHash, data):
     
     #debug info
     if stat == 0:
-        #TODO: increment 'link number' for column '0'
-        messagesAttachment.insert(mHash, {'0': '0'})
+        link = messagesAttachment.insert(mHash, columns=['0'])
+        link = int(link) + 1        
+        messagesAttachment.insert(mHash, {'0': link})
+        
         print 'INFO: [deduplication in effect]'
             
 
 ################
 # READING APIs
 # 
+
+def getInbox(inbox):
+    
+    inbox_expr = create_index_expression('uid', inbox)
+    clause = create_index_clause([inbox_expr,], count=20)
+    
+    for key, data in messagesMetaData.get_indexed_slices(clause):
+        print data['uid'] + ",", data['subject'], data['eDate']
+
+    
+    
+def getTop(key, top):
+    
+    try:
+        data = lastInbox.get(key, column_count=top)
+    except NotFoundException:
+        data = None
+    
+        
+    return data
 
 # test if email exist in DB
 # return 1 / exists, 0 / doesnt exist

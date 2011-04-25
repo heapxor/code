@@ -12,6 +12,24 @@ import hashlib
 from cass import emailCheck
 
 
+
+def inbox(key):
+    
+    
+    
+    
+
+def top(key):
+    
+    ret = cass.getTop(key, 10)
+    
+    if ret == None:
+        print 'Inbox doesnt exist'
+    else:
+        for key in ret.itervalues():
+            infoEmail(key)
+
+
 # basic information about email, useful for web email client (like a gmail)
 #
 # return From, Subject, Data, Size, #attachments
@@ -69,7 +87,15 @@ def main():
         ret = rawEmail(key)
         # print raw email
         print ret,
-        
+    #elif arg == 'del'  -- how to do deletion??? 
+    
+    elif arg == 'top':
+        top(key)   
+    elif arg == 'inbox':
+        inbox(key)
+    elif arg == 'domains'
+        domains(key)
+    
     else:
         print 'Error: client got bad input parameters'
         sys.exit()

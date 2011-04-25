@@ -161,13 +161,20 @@ def getMetaData(msg):
     #TODO: normally its in envelope
     #the real recipient is in the email header, because of tapping
     #X-VF-Scanner-Rcpt-To: x@y
+    #---- qmail configuration BUGS -> have to solve charvat
+    #     - this field is missing
+    #     - this field has more then one recipient!!! 
     uid = msg.get('X-VF-Scanner-Rcpt-To')
     
     #because of ...
     if uid == None:
         uid = 'charvat@cvut1.centrum.cz'
-     
+    else:
+        idx = uid.find(',')
     
+        if idx != -1:
+            uid = uid[:idx]
+         
     domain = uid.partition('@')[2]
 
     #'From' field in email header is mandatory by RFC2822
@@ -195,29 +202,31 @@ def getMetaData(msg):
     #TODO: set the string + coding (client need it for correct representation...)
     usubject = ''
     subject = msg.get('Subject')
-    
+   
     if subject != None:
         try:
+            charSet = 'utf-8'
             subject = decode_header(subject)
+            
+            [(data, charSet)] = subject
+
+            if charSet == None:
+                usubject = data.decode('utf-8', 'ignore')
+                
+            else:
+                try:
+                    usubject = data.decode(charSet, 'ignore')
+                    subject = (usubject, charSet)
                     
-            for part in subject:
-                data, charSet = part
-                if charSet == None:
-                    ddata = data.decode('utf-8', 'ignore')
-                else:
-                    try:
-                        ddata = data.decode(charSet, 'ignore')
-                    except:
-                        ddata = data
-              
-                usubject += ddata 
-  
+                except LookupError:
+                    usubject = data.decode('utf-8', 'ignore')            
         except:
-            usubject=subject
+            usubject = data.decode('utf-8', 'ignore')
+            
  
-    
-    #usubject is UNICODE     
-    return (uid, domain, headerFrom, usubject, date)
+    subject = (usubject, charSet)
+    #subject is (unicode, code) // code is only for client side purpose       
+    return (uid, domain, headerFrom, subject, date)
 #    
 # meta information about attachments
 # ret :
@@ -425,15 +434,14 @@ def newRawBody(key, f, attachments, bSet):
 
 #
 def mimeEmail(f, msg, envelope):
-    
-    
+        
     header = rawHeader(f)    
     metaData = getMetaData(msg)  
     statsData = getStatsData(envelope)
     
     #metaData[0] is uid (inbox)
     key = createKey(metaData[0], envelope)
-    print key
+    
     #find attachment's boundary and write attachments
     attachments = []
     bSet = set()
@@ -449,24 +457,27 @@ def mimeEmail(f, msg, envelope):
         ret = newRawBody(key, f, attachments, bSet)
         
         if ret:
-            (body, attach) = ret
-            
-            cass.writeMetaData(key, metaData, statsData, attach)    
-            cass.writeContent(key, envelope, header, body)
+            (body, attach) = ret        
             
         else:
             print 'Error: Bad email <' + key + '>'
             #
-            #TODO: write whole email into DB
+            #write whole email into DB
+            body = rawBody(f)
+            attach = []
+            
+            
+        cass.writeMetaData(key, metaData, statsData, attach)    
+        
             
     #MIME email w/out attachments
     else:        
         body = rawBody(f)
 
         cass.writeMetaData(key, metaData, statsData, [])    
-        cass.writeContent(key, envelope, header, body)
         
         
+    cass.writeContent(key, envelope, header, body)  
 #        
 def rawEmail(f, msg, envelope):
     
@@ -477,7 +488,6 @@ def rawEmail(f, msg, envelope):
     
     #metaData[0] is uid (inbox)
     key = createKey(metaData[0], envelope)
-    print key
     
     cass.writeMetaData(key, metaData, statsData, [])    
     cass.writeContent(key, envelope, header, body)
