@@ -68,7 +68,7 @@ def getStatsData(envelope):
     time = fields[2]
     size = fields[3]
     
-    #???by qmail-scanner documantation - second field should be qmila-scanner[PID]     
+    #by qmail-scanner documantation - second field should be qmila-scanner[PID]     
     #5 (envelope sender)
     #6 (envelope recipient)    
     sender = fields[4]
@@ -188,6 +188,9 @@ def getMetaData(msg):
         
     #Date field in email header is mandatory by RFC2822
     #format: Fri, 18 Mar 2011 16:30:00 +0000 (RFC2822)
+    
+    #OverflowError: mktime argument out of range
+    #http://bugs.python.org/issue11850 (python bug)
     date = msg.get('Date')
     if date == None:
         date = ''
@@ -197,36 +200,39 @@ def getMetaData(msg):
         if pdate == None:
             date  = ''
         else:
-            date = formatdate(mktime_tz(pdate), usegmt=True)
+            try:
+                date = formatdate(mktime_tz(pdate), usegmt=True)
+            except OverflowError:
+                date = ''
+                pdate = None
     
-    
-    #TODO: set the string + coding (client need it for correct representation...)
+    #TODO:  the string + coding (client need it for correct representation...)
     usubject = ''
     charSet = 'utf-8'
     subject = msg.get('Subject')
    
-    #gosh! - subject :bytearray!!!!
+    #subject is stored in DB as bytearray
     if subject != None:
         try:
             subject = decode_header(subject)
             
-	    usubject =''
+            usubject =''
 
-	    for part in subject:
-            	data, charSet = part
-            	usubject += data 
+            for part in subject:
+                data, charSet = part
+                usubject += data 
 
-	    
-	    if charSet == None:
-	    	charSet = 'utf-8'
+            if charSet == None:
+                charSet = 'utf-8'
 
         except:
             usubject = subject 
             
    
     subject = (usubject, charSet)
+    
     #subject is (unicode, code) // code is only for client side purpose       
-    return (uid, domain, headerFrom, subject, date)
+    return (uid, domain, headerFrom, subject, date, pdate)
 #    
 # meta information about attachments
 # ret :
@@ -261,14 +267,12 @@ def metaAttachment(msg, parentType, boundary, attach ,bSet):
             if type(fileName) is unicode:
                 fileName = fileName.encode('utf8', 'ignore')
                 
-                
             """          
             try:
                 fileName = str(msg.get_filename())                
             except UnicodeEncodeError:                
                 fileName = msg.get_filename().encode('utf8', 'ignore')
             """
-
         
         if parentType.lower() == 'message/rfc822':
             attach.append((boundary, parentType, fileName))
@@ -325,8 +329,7 @@ def newRawBody(key, f, attachments, bSet):
                 if bound[1] in line.lower():         
                     boundaryHeader = 1
                 else:
-                    #possible folding in header field
-                    
+                    #possible folding in header field                    
                     line = buff.readline()
             
                     if line[0] == '\t' or line[0] == ' ':

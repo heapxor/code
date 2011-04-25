@@ -95,10 +95,9 @@ write_consistency_level=ConsistencyLevel.QUORUM, read_consistency_level=Consiste
 
 # write MetaData    
 def writeMetaData(key, metaData, statData, attachments):
-#metaData: (uid, domain, headerFrom, (subject,code), headDate)  #
+#metaData: (uid, domain, headerFrom, (subject,code), headerDate, pDate)  #
 #statData: (time, size, spam, sender, recipient, envDate) #
     
-#    print metaData[3]
     subject, code = metaData[3]
     
     #FIX: if field is empty - doesnt create column for it...?
@@ -138,22 +137,23 @@ def writeMetaData(key, metaData, statData, attachments):
     
     #top100msgs
     #####################
-    #get it from email header- hDate
-    #"2009-11-15T14:12:12"
-    #--- > time = time.mktime(email.utils.parsedate_tz('Sun, 24 Apr 2011 11:55:00 GMT')[:9])
-    date, time = statData[5].split('T')
-    date = date.split('-')
-    time = time.split(':')
+    #email time from its header
+    #date is output of email.utils.parsedate_tz 
+    date = metaData[5]
     
-    time = datetime(int(date[0]),
-    		   	int(date[1]),
-			int(date[2]),
-			int(time[0]),
-			int(time[1]),
-			int(time[2]))
+    if date != None:
     
-    batch.insert(lastInbox, metaData[0], {time: key})
+        time = datetime(date[0],
+    		   	         date[1],
+		                 date[2],
+			             date[3],
+			             date[4],
+			             date[5]
+                        )
+    
+        batch.insert(lastInbox, metaData[0], {time: key})
         
+   
     batch.send()
 
 #
@@ -209,6 +209,7 @@ def writeAttachment(mHash, data):
     stat = 0
     try:
         messagesAttachment.get(mHash, column_count=1)
+    #attachment is not in DB (store it for the first time
     except NotFoundException:
         #>1MB==1024KB
         stat = 1
@@ -221,9 +222,11 @@ def writeAttachment(mHash, data):
             messagesAttachment.insert(mHash, {'1': data})
     
     if stat == 0:
+        
         link = messagesAttachment.get(mHash, columns=['0'])
-        link = str(long(link['0']) + 1)        
         #overflow?
+        link = str(long(link['0']) + 1)        
+        
         messagesAttachment.insert(mHash, {'0': link})
         
         print 'INFO: [deduplication in effect]'
@@ -233,15 +236,19 @@ def writeAttachment(mHash, data):
 # READING APIs
 # 
 
-def getInbox(inbox, size):
+#
+# get #emailCount of emails from inbox (preferably all of them) 
+def getInbox(inbox, emailCount):
     
     inbox_expr = create_index_expression('uid', inbox)
-    clause = create_index_clause([inbox_expr,], count=size)
+    clause = create_index_clause([inbox_expr,], count=emailCount)
     
     data = messagesMetaData.get_indexed_slices(clause)
     
     return data
 
+#
+# get last #emailCount of emails from inbox sorted by their time
 def getTop(key, emailCount):
     
     try:
@@ -252,7 +259,8 @@ def getTop(key, emailCount):
     return data
 
 # test if email exist in DB
-# return 1 / exists, 0 / doesnt exist
+# ret:
+#     1 - exists, 0 - doesnt exist
 def emailCheck(key):
     
     stat = 1
@@ -279,9 +287,9 @@ def getEmailInfo(key):
         attchs = messagesMetaData.get(key, columns=['attachments'])
         attchs = attchs['attachments']
     except NotFoundException:
-        attchs = 0
+        attchs = '0'
         
-    ret['attachments'] = str(attchs)
+    ret['attachments'] = attchs
     
     
     return ret

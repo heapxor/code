@@ -12,28 +12,32 @@ import hashlib
 from cass import emailCheck
 
 def infoPrint(data):
-   
-    if data.has_key('attachments'):
-	attch = data['attachments']
-    else:
-	attch = '0'
 
-    print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['eDate'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + attch
+    print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['eDate'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + data['attachments'] 
 
 
-def inbox(inbox):
+def dumpInbox():
+    
+    print '?'
+
+# list all (35) messages per inbox  
+def listInbox(inbox):
     
     size = 35
 
     inboxData = cass.getInbox(inbox, size)
 
+    #The key is email key (use it for email dump)
     for key, data in inboxData:
-	infoPrint(data)
+        infoPrint(data)
 
 
+# print last 20 emails from inbox
 def topEmails(key):
     
+    
     ret = cass.getTop(key, 20)
+    
     if ret == None:
         print 'Inbox doesnt exist'
     else:
@@ -50,9 +54,7 @@ def infoEmail(key):
         print 'Email is not in the DB'
     else:
         data = cass.getEmailInfo(key)
-    
-        #what about data.keys() ?
-   	infoPrint(data)
+        infoPrint(data)
  
 #
 # raw email
@@ -60,7 +62,7 @@ def rawEmail(key):
 
     #is the email in DB?    
     if emailCheck(key) == 0:
-        #return 'Email is not in the DB'
+        print 'Email is not in the DB'
         return 0
     else:    
         header = cass.getRawHeader(key)        
@@ -78,11 +80,6 @@ def rawEmail(key):
         return header + body
         
 #
-def attachEmail(key):
-    
-    print ''
-    
-#
 def main():
     
     arg = sys.argv[1]
@@ -91,22 +88,16 @@ def main():
     if arg == 'info':
         infoEmail(key)
         
-    elif arg == 'attach':
-        attachEmail(key)
-        
     elif arg == 'raw':
         ret = rawEmail(key)
         # print raw email
-        print ret,
-    #elif arg == 'del'  -- how to do deletion??? 
-    
+        print ret,    
     elif arg == 'top':
-        topEmails(key)   
+        topEmails(key)
+           
     elif arg == 'inbox':
-        inbox(key)
-    #elif arg == 'domains'
-    #    domains(key)
-    
+        listInbox(key)
+        
     else:
         print 'Error: client got bad input parameters'
         sys.exit()
