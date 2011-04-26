@@ -1,3 +1,10 @@
+#!/usr/bin/python
+
+#
+# Make connection class for ElasticSearch 
+# Create index and index mapping
+#
+
 #################
 ###TODO: 
 ###
@@ -7,7 +14,6 @@
 ###
 
 import pyes
-
 from pyes import ES
 from eventlet import monkey_patch
 
@@ -15,7 +21,7 @@ from eventlet import monkey_patch
 
 
 def get_conn():
-    #change to thrift
+    #thrift is really bad idea 
     iconn = ES(['cvut3:9200', 'cvut4:9200', 'cvut5:9200', 'cvut6:9200', 'cvut7:9200', 'cvut8:9200'], 
                timeout=13, max_retries=30, bulk_size=50)
     
@@ -34,22 +40,22 @@ class ESload():
     
     
     def __init__(self):
+        #name of Index
         self._indexName = 'archive'
         self.iconn = get_conn()
         self.bulkSize = 0
 
     def createIndex(self):
      
-        #_indexType = 'email'
         status = None
         try:
             status = self.iconn.status(self._indexName)  
         except:
-            #put the shards/replicas into creation... ?
+            #put the shards/replicas into creation...
             self.iconn.create_index(self._indexName)
-            
-            #date string or DATE type
+                        
             #inbox shouldnt by analyzed -- but bug X-VF-Scanner-Rcpt-To, 'index': 'not_analyzed'
+	    # - better analyze it for 'pretty' searching :)
             mappingsEmail = {
                                  
                             u'inbox': {'type': u'string'},
@@ -82,7 +88,7 @@ class ESload():
             self.iconn.put_mapping("envelope", {'properties':mappingsEnv}, self._indexName)           
             self.iconn.put_mapping("envelope", mappingsSource, self._indexName)
             
-    
+    #index email data   
     def indexEmailData(self, data, _id):
     
         self.iconn.index(data, self._indexName, "email", _id)
@@ -92,8 +98,8 @@ class ESload():
         if self.bulkSize == 350:
             #self.iconn.refresh([self._indexName])
             self.bulkSize = 0
-            #print self.bulkSize
 
+    #index envelope data
     def indexEnvelopeData(self, data, _id):    
         
         self.iconn.index(data, self._indexName, "envelope", _id)    
@@ -103,9 +109,8 @@ class ESload():
 #    
 def main(self):
         
-    print 'ES pow!'
+    print 'ES!'
     self.createIndex()
-    
         
 #
 if __name__ == '__main__':

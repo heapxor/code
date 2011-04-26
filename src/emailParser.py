@@ -111,7 +111,6 @@ def createKey(uid, envelope):
     m.update(data)
     
     key = m.hexdigest()
-        
     
     return key
 
@@ -192,19 +191,21 @@ def getMetaData(msg):
     #OverflowError: mktime argument out of range
     #http://bugs.python.org/issue11850 (python bug)
     date = msg.get('Date')
+    pdate = None
+
     if date == None:
         date = ''
     else:    
         pdate = parsedate_tz(date)
-        
-        if pdate == None:
+	
+	if pdate == None:
             date  = ''
         else:
             try:
                 date = formatdate(mktime_tz(pdate), usegmt=True)
             except OverflowError:
                 date = ''
-                pdate = None
+		pdate = None
     
     #TODO:  the string + coding (client need it for correct representation...)
     usubject = ''

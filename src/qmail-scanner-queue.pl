@@ -1,10 +1,15 @@
 #!/usr/bin/perl -T
 
 ##################
-# TODO:
-#	smtp transaction mechanism or fork() & insert into DB
+# SETUP:
+#   
+#   PATH in system where we save hardlink on the received email by QMAIL
+#   my $path="/big/cassandra";
+#   
+#   Script which call Celery 'task' {insert email into DB and fulltext engine
+#   system("python /var/spool/qscan/cassandraClient.py $hlinkEmail &");
 #
-
+#
 
 
 #
@@ -3250,9 +3255,11 @@ sub start_scanners {
       my @path = split('/', $msg);
       my $emailName = pop(@path);
       $hlinkEmail = "$path/$sub_dir/$emailName";
+    
       #nemozem robit hardlink... jedine v ramci jedneho FS
-      $ret = copy "$msg", "$hlinkEmail" ;
-     
+      #$ret = link "$msg", "$hlinkEmail";      
+      $ret = copy "$msg", "$hlinkEmail";
+      
       &qmail_parent_check;
       &qmail_requeue($e_sender,$f_recips,$msg);
 
@@ -3267,7 +3274,7 @@ sub start_scanners {
   print ENVF $envelope;
   close(ENVF);
 
-  #system("python /var/spool/qscan/cassandraClient.py $hlinkEmail &");
+  system("python /var/spool/qscan/cassandraClient.py $hlinkEmail &");
 }
 
 sub sa_defaults {

@@ -245,7 +245,7 @@ def getInbox(inbox, emailCount):
     inbox_expr = create_index_expression('uid', inbox)
     clause = create_index_clause([inbox_expr,], count=emailCount)
     
-    data = messagesMetaData.get_indexed_slices(clause)
+    data = messagesMetaData.get_indexed_slices(clause, column_count=emailCount)
     
     return data
 
