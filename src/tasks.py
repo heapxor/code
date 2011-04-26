@@ -1,23 +1,27 @@
+#!/usr/bin/python
+
+# This program define tasks for Celery 
+#
+#
+#
+
+
 import celery, sys
 import hashlib
 #sys.path.insert(0, '/usr/local/mailman/bin'
-
 
 from emailReader import rawEmail
 from celery import current_app
 from celery.task import task
 from celery.task.control import rate_limit
 from emailParser import parseEmail
+from esParser import indexEmail
 from eventlet import monkey_patch
 
+#monkey_patch()
 
-
-
-monkey_patch()
-
-
+# task which store data into DB (cassandra)
 @task(ignore_result=True)
-#@task
 def insertData(fileName):
 
     logger = insertData.get_logger()
@@ -25,12 +29,20 @@ def insertData(fileName):
     logger.info("Task id %s" %  insertData.request.id)
 
     runTime = parseEmail(fileName)
-    #print "Running time %s" % runTime
-    #print fileName
-    #return runTime
 
+# task which store data into fulltext search engine
+# Index max 150 docs per minute
+@task(ignore_result=True, rate_limit="150/m")
+def indexData(key):
 
-#@task(ignore_result=True, rate_limit="15/m")
+    logger = insertData.get_logger()
+    logger.info("Reading email %s" % fileName)
+    logger.info("Task id %s" %  insertData.request.id)
+
+    runTime = indexEmail(fileName)
+
+# task which check data intgerity 
+# comparing sha1 hash of local file (email) with email fetched from DB
 @task(ignore_result=True)
 def checkData(key):
     
@@ -56,10 +68,6 @@ def checkData(key):
  
         if sHash != dHash:
             logger.info("[Error/EmailTest] Email corrupted.] < %s >" % key)
-            path = '/big/testemails/' + key[key.rfind('/')+1:]
-            f = open(path, 'w')
-            f.write(email)
-            f.close()
             #return "0"
         else:
             logger.info("[Email data test: OK]")

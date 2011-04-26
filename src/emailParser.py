@@ -1,7 +1,15 @@
 #!/usr/bin/python
 
+######
+##  RFC2822 compliant email parser with attachments deduplication
+##  
+##  we deduplicate message/rfc822 attachments too 
+##
+
+
 ##################################
 ## TODO:
+##     
 ##     data expiration
 ##     folding in get_content_type
 ##     write attachments data after check that email is not bad / unimportant...
@@ -197,15 +205,15 @@ def getMetaData(msg):
         date = ''
     else:    
         pdate = parsedate_tz(date)
-	
-	if pdate == None:
+
+        if pdate == None:
             date  = ''
         else:
             try:
                 date = formatdate(mktime_tz(pdate), usegmt=True)
             except OverflowError:
                 date = ''
-		pdate = None
+                pdate = None
     
     #TODO:  the string + coding (client need it for correct representation...)
     usubject = ''
@@ -232,7 +240,7 @@ def getMetaData(msg):
    
     subject = (usubject, charSet)
     
-    #subject is (unicode, code) // code is only for client side purpose       
+    #subject is (raw text (bytechar) // code is only for client side purpose       
     return (uid, domain, headerFrom, subject, date, pdate)
 #    
 # meta information about attachments
@@ -468,8 +476,7 @@ def mimeEmail(f, msg, envelope, emailFile):
             #
             #write whole email into DB
             body = rawBody(f)
-            attach = []
-            
+            attach = []            
             
         cass.writeMetaData(key, metaData, statsData, attach)    
         

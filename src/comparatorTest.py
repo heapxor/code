@@ -7,7 +7,8 @@ from celery.task.sets import subtask
 import StringIO, hashlib
 import emailReader
 
-#
+# Test task for data integrity 
+
 @task
 def dataTest(email):
 

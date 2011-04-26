@@ -35,34 +35,34 @@ def main():
     start = time.time()
 
     try:
-    	for root, dirs, files in os.walk('/big/mails'):
-	    for name in files:
-	        email = join(root,name)
+        for root, dirs, files in os.walk('/big/mails'):
+            for name in files:
+                email = join(root,name)
 	        
-		if not 'envelope' in email:
-		    size = getsize(email)
-		    emailStats[0] += 1
-		    emailStats[1] += size
+                if not 'envelope' in email:
+                    size = getsize(email)
+                    emailStats[0] += 1
+                    emailStats[1] += size
 
-		    insertData.apply_async((email, ), publisher=publisher)
-		    #checkData.apply_async((email,), publisher=publisher)
-		    #indexData.apply_async((email,), publisher=publisher)
+                    insertData.apply_async((email, ), publisher=publisher)
+                    #checkData.apply_async((email,), publisher=publisher)
+                    #indexData.apply_async((email,), publisher=publisher)
 
-	            #if emailStats[0] == 10:
-		    #	break
+                    #if emailStats[0] == 10:
+                    #	break
                     
-		    #statistics
-		    if emailStats[0] % 3000 == 0:
-		    	print emailStats[0]
+                    #statistics
+                    if emailStats[0] % 3000 == 0:
+                        print emailStats[0]
             
-	    #if emailStats[0] == 10:
-	    #    break
+            #if emailStats[0] == 10:
+            #break
   
     except EnvironmentError:
-    	print 'I/O error'
+        print 'I/O error'
     finally:
-    	publisher.close()
-	connection.close()
+        publisher.close()
+        connection.close()
 
     duration  = time.time() - start
    

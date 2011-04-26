@@ -55,7 +55,7 @@ class ESload():
             self.iconn.create_index(self._indexName)
                         
             #inbox shouldnt by analyzed -- but bug X-VF-Scanner-Rcpt-To, 'index': 'not_analyzed'
-	    # - better analyze it for 'pretty' searching :)
+            # - better analyze it for 'pretty' searching :)
             mappingsEmail = {
                                  
                             u'inbox': {'type': u'string'},
