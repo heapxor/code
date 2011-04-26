@@ -26,13 +26,15 @@ use emailArchive;
 
 create column family messagesMetaData with comparator=UTF8Type and memtable_throughput=64 
     and keys_cached = 0 and key_cache_save_period = 0
-    and column_metadata=[{ column_name: subject, validation_class:UTF8Type}];
+    and column_metadata=[{ column_name: time, validation_class:LongType}, { column_name: size, validation_class:LongType}, 
+    { column_name: spam, validation_class:LongType}];
     
 create column family messagesContent with memtable_throughput=64 
     and keys_cached = 0 and key_cache_save_period = 0;
     
 create column family messagesAttachment with memtable_throughput=64 and 
-    keys_cached = 0 and key_cache_save_period = 0;
+    keys_cached = 0 and key_cache_save_period = 0 
+    and column_metadata=[{ column_name: 0, validation_class:LongType}];
     
 create column family lastInbox with comparator=TimeUUIDType and memtable_throughput=64 and 
     keys_cached = 0 and key_cache_save_period = 0;
@@ -49,18 +51,19 @@ from datetime import datetime
 from pycassa.cassandra.ttypes import ConsistencyLevel
 from pycassa.batch import Mutator
 from pycassa.cassandra.ttypes import NotFoundException
-#from pycassa.columnfamily import gm_timestamp
 from pycassa.index import *
+#from pycassa.columnfamily import gm_timestamp
 #from eventlet import monkey_patch
 
 
 #__all__ = ['save_header']
-
-"""
- data inserter and reader for cassandra DB
-"""
-
 #monkey_patch()
+
+"""
+
+ data inserter and reader for cassandra DB
+ 
+"""
 
 """
 log = pycassa.PycassaLogger()
@@ -69,11 +72,12 @@ log.set_logger_level('debug')
 log.get_logger().addHandler(logging.FileHandler('/home/lenart/src/py.log'))
 """
 
+#tune it!
 pool = pycassa.ConnectionPool(keyspace='emailArchive',
 server_list=['cvut3:9160', 'cvut4:9160', 'cvut5:9160', 'cvut7:9160', 'cvut8:9160'], 
     prefill=False, pool_size=15, max_overflow=10, max_retries=-1, timeout=5, pool_timeout=200)
 
-#data integrity is 1. priority -> QUORUM
+#data integrity is our priority on the first place -> QUORUM
 batch = Mutator(pool, queue_size=50, write_consistency_level=ConsistencyLevel.QUORUM)
 
 messagesMetaData = pycassa.ColumnFamily(pool, 'messagesMetaData',
@@ -115,7 +119,6 @@ def writeMetaData(key, metaData, statData, attachments):
                                           'eDate': statData[5]
                                         })
     
-    
     if len(attachments) != 0:
         
         batch.insert(messagesMetaData, key, { 'attachments': str(len(attachments)) })
@@ -137,12 +140,11 @@ def writeMetaData(key, metaData, statData, attachments):
     
     #top100msgs
     #####################
-    #email time from its header
+    #email time is from email header
     #date is output of email.utils.parsedate_tz 
     date = metaData[5]
     
-    if date != None:
-    
+    if date != None:    
         time = datetime(date[0],
     		   	         date[1],
 		                 date[2],
@@ -152,8 +154,7 @@ def writeMetaData(key, metaData, statData, attachments):
                         )
     
         batch.insert(lastInbox, metaData[0], {time: key})
-        
-   
+           
     batch.send()
 
 #
@@ -166,10 +167,11 @@ def splitter(l, n):
         yield chunk
         i += n
         chunk = l[i:i+n]
+        
 #
 # write chunks into DB
 def chunkWriter(key, data, cf, i):    
-    #chunk size 512KB
+    #chunk size 512KB (best performance of DB when storing binary data)
     chunkSize = 524288
     
     for chunk in splitter(data, chunkSize):
@@ -237,7 +239,7 @@ def writeAttachment(mHash, data):
 # 
 
 #
-# get #emailCount of emails from inbox (preferably all of them) 
+# get #emails from inbox (preferably all of them) 
 def getInbox(inbox, emailCount):
     
     inbox_expr = create_index_expression('uid', inbox)
@@ -248,7 +250,7 @@ def getInbox(inbox, emailCount):
     return data
 
 #
-# get last #emailCount of emails from inbox sorted by their time
+# get last #emails from inbox sorted by their time (Date field from header)
 def getTop(key, emailCount):
     
     try:
@@ -257,6 +259,7 @@ def getTop(key, emailCount):
         data = None
     
     return data
+
 
 # test if email exist in DB
 # ret:
@@ -294,14 +297,14 @@ def getEmailInfo(key):
     
     return ret
 
-# return email raw header
+# return: email raw header
 def getRawHeader(key):
         
     ret= messagesContent.get(key, columns= ['1'])
     
     return ret['1']
 
-# return #attachments of email 
+# return: #attachments of email 
 def getMimeInfo(key):
     
     try:
@@ -313,7 +316,7 @@ def getMimeInfo(key):
         
     return attch
 
-# return email raw body (if size of body >1MB then it is stored in chunks) 
+# return: email raw body (if size of body >1MB then it is stored in chunks) 
 def getRawBody(key):
     
     columnsTotal =  messagesContent.get_count(key)
@@ -333,7 +336,7 @@ def getRawBody(key):
     
     return body
 
-# return list of attachments with their hashes
+# return: list of attachments with their hashes
 def getAttachHash(key, numbAttchs):
 
     endColumn = 'a' + str(numbAttchs-1).zfill(3)
@@ -349,7 +352,7 @@ def getAttachHash(key, numbAttchs):
     return attchHashList 
 
 #
-# return data of attachment    
+# return: data of attachment (string)    
 def getAttachData(key):
     
     columnsTotal = messagesAttachment.get_count(key)
@@ -368,9 +371,9 @@ def getAttachData(key):
     return data
 
 #
-# recreate source raw email
+# Create raw email
 # 
-# return raw email
+# return: raw email (string)
 def getMimeBody(key, attch):
    
     rawBody = getRawBody(key)

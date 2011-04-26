@@ -35,15 +35,18 @@ def listInbox(inbox):
 # print last 20 emails from inbox
 def topEmails(key):
     
-    
+    l = [] 
+
     ret = cass.getTop(key, 20)
     
     if ret == None:
         print 'Inbox doesnt exist'
     else:
         for key in ret.itervalues():
-            infoEmail(key)
-
+            ret = infoEmail(key)
+	    l.append(ret)
+	
+    return l 		
 
 # basic information about email, useful for web email client (like a gmail)
 #
@@ -54,7 +57,8 @@ def infoEmail(key):
         print 'Email is not in the DB'
     else:
         data = cass.getEmailInfo(key)
-        infoPrint(data)
+        #infoPrint(data)
+	return data
  
 #
 # raw email
