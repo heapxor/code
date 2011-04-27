@@ -1,0 +1,42 @@
+-- domain stats
+register 'pygmalion-1.0.0-SNAPSHOT.jar';
+
+raw = LOAD 'cassandra://emailArchive/messagesMetaData' USING CassandraStorage() AS (key, columns: bag {T: tuple(name, value)});
+rows = FOREACH raw GENERATE FLATTEN(org.pygmalion.udf.FromCassandraBag('domain, spam, size, time', columns)) AS (
+        domain:chararray,
+        spam:long,
+        size:long,
+        time:float
+);
+grp = group rows by (domain, spam);
+
+-- pocet emailov typu notspam/spam pre kazdu domenu
+stat = foreach grp generate group, COUNT($1);
+STORE stat into 'emailsPerDomain' using PigStorage(',');
+
+-- celkova velkost emailov pre danu domenu ((ostrava.npu.cz,0),96111)
+domainSize = foreach grp generate group, SUM(rows.size);
+
+-- celkova cas spracovania emailov pre danu domenu
+domainTime  = foreach grp generate group, SUM(rows.time);
+
+-- najdlhsi cas filtrovania emailu /per domain
+notSpam = FILTER grp BY group.spam == 1;
+maxTime = foreach grp {
+  time = rows.time;
+  generate group, MAX(time);
+};
+
+-- najvacsii email (B) /per domain
+notSpam = FILTER grp BY group.spam == 1;
+maxSize = foreach grp {
+  size = rows.size;
+  generate group, MAX(size);
+};
+
+--pocet vsetkych emailov v DB
+emails = foreach (group rows all) generate COUNT($1);
+store emails into 'testEmails' using PigStorage(',');
+
+
+
