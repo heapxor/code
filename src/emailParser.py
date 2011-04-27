@@ -288,13 +288,13 @@ def metaAttachment(msg, parentType, boundary, attach ,bSet):
         else:
             attach.append((boundary, msg.get_content_type(), fileName))        
 #        
-def writeAttachment(data):
+def writeAttachment(data, fname):
         
     m = hashlib.sha256()      
     m.update(data)
     key = m.hexdigest()
     
-    cass.writeAttachment(key, data)                                 
+    cass.writeAttachment(key, fname, data)          
     
     return key 
 #
@@ -403,7 +403,7 @@ def newRawBody(key, f, attachments, bSet):
         elif stat == 4:
             #print "Stat:4"          
             
-            attKey = writeAttachment(''.join(data))                
+            attKey = writeAttachment(''.join(data), bound[2]) 
             hash = 'DEDUPLICATION:' + attKey + '\n'
             
             body.append(hash)
@@ -476,7 +476,7 @@ def mimeEmail(f, msg, envelope, emailFile):
             #
             #write whole email into DB
             body = rawBody(f)
-            attach = []            
+            attach = []
             
         cass.writeMetaData(key, metaData, statsData, attach)    
         

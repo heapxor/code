@@ -7,14 +7,16 @@ from emailParser import createKey
 from email.errors import NoBoundaryInMultipartDefect
 from email.utils import quote
 import es
-from eventlet import monkey_patch
+
+#from eventlet import monkey_patch
 
 #monkey_patch()
 
 
-
+# email meta information usefull for fulltext search
+#
 def elasticEmail(envelope, metaData, attchs, body):
-#metaData: (uid, domain, eFrom, subject, date)    
+#metaData: (uid, domain, eFrom, subject, date, pdate)    
     
     #8 Message-ID
     #4 Raw size of message
@@ -24,19 +26,22 @@ def elasticEmail(envelope, metaData, attchs, body):
 
     inbox = metaData[0]
     eFrom = metaData[2]
-    #??? encode it somehow
+    #its plain text (type str)
     subject, code = metaData[3]
     
-    subject = subject.encode(code, 'ignore')
+    
+    #subject = subject.encode(code, 'ignore')
     #UNICODE - utf-8 (because of ES
     subject = subject.decode('utf8', 'ignore')
     
-    
     #Date from email header has format: Fri, 09 Nov 2001 01:08:47 GMT (RFC2822)
     #-> transform it into "2009-11-15T14:12:12" for fulltext search 
-    date = metaData[4]    
-    d = time.strptime(date, "%a, %d %b %Y %H:%M:%S %Z")    
-    date = str(d.tm_year) + "-" + str(d.tm_mon) + "-" + str(d.tm_mday) + "T" + str(d.tm_hour) + ":" + str(d.tm_min) + ":" + str(d.tm_sec)    
+    date = metaData[4]
+    
+    if date != '':    
+        d = time.strptime(date, "%a, %d %b %Y %H:%M:%S %Z")    
+        date = str(d.tm_year) + "-" + str(d.tm_mon) + "-" + str(d.tm_mday) + "T" + str(d.tm_hour) + ":" + str(d.tm_min) + ":" + str(d.tm_sec)
+        
     
     #attachments list
     attchList = "["
@@ -50,6 +55,8 @@ def elasticEmail(envelope, metaData, attchs, body):
             attchList += ','
     
     attchList += "]"
+    
+    
     data = dict(inbox=inbox,
                 subject=subject,
                 date=date,
@@ -62,6 +69,8 @@ def elasticEmail(envelope, metaData, attchs, body):
     
     return data
 
+#
+# use only text/plain parts from email (it should be human-readable text)
 #
 def getBody(msg):
     
@@ -92,7 +101,7 @@ def getBody(msg):
                 except LookupError:
                     body = part.get_payload().decode('utf-8', 'ignore')
 
-           
+        #find attachments names
         if (part.get_content_type() != 'text/plain' and part.get_content_type() != 'text/html' and
             part.get_content_maintype() != 'multipart' and part.get_content_maintype() != 'message' and 
             part.get_content_type() != 'message/rfc822'):
@@ -102,13 +111,21 @@ def getBody(msg):
             if fileName == None:
                 fileName = ''
             else:
-                attchs.append(fileName)
-            
-        
+                if type(fileName) is unicode:
+                    fileName = fileName.encode('utf8', 'ignore')
+                else:
+                    attchs.append(fileName)
+                    
+                        
     body = ''.join(body)
     #print body.encode('iso-8859-2',  'ignore' )
     
     return (body, attchs)
+
+
+#
+# create data for fulltext in email.envelope 
+# IP, Sender, Recipient, Date  
 #
 def elasticEnvelope(envelope):
         
@@ -129,7 +146,6 @@ def elasticEnvelope(envelope):
     d = time.strptime(date, "%a, %d %b %Y %H:%M:%S %Z")
     date = str(d.tm_year) + "-" + str(d.tm_mon) + "-" + str(d.tm_mday) + "T" + str(d.tm_hour) + ":" + str(d.tm_min) + ":" + str(d.tm_sec)    
         
-        
     data = dict(sender=sender, 
                 recipient=recipient,
                 ip=ip,
@@ -146,7 +162,7 @@ def mimeEmail(msg, envelope, metaData, ff):
     
     """
     if len(body) > 100000:
-        print 'SIZE!!' + str(ff)
+        print 'Email body is > 100KB!'
     """
     
     return data
@@ -165,11 +181,7 @@ def rawEmail(msg, envelope, metaData):
     except LookupError:
         body = msg.get_payload().decode('utf-8', 'ignore')
         
-    """
-    #print 'BODY:' + str(len(body))
-    if len(body) > 100000:
-       print 'SIZE!!'
-    """
+  
     data = elasticEmail(envelope, metaData, [], body)
     
     return data
@@ -201,7 +213,6 @@ def parseEmail(emailFile):
         
     except NoBoundaryInMultipartDefect:
         data = rawEmail(msg, envelope, metaData, )
-    
     
     key = createKey(metaData[0], envelope)
     envData = elasticEnvelope(envelope)

@@ -26,22 +26,26 @@ use emailArchive;
 
 create column family messagesMetaData with comparator=UTF8Type and memtable_throughput=64 
     and keys_cached = 0 and key_cache_save_period = 0
-    and column_metadata=[{ column_name: time, validation_class:LongType}, { column_name: size, validation_class:LongType}, 
-    { column_name: spam, validation_class:LongType}];
-    
+    and column_metadata=[
+        {column_name: time, validation_class:AsciiType}, 
+        {column_name: size, validation_class:LongType}, 
+        {column_name: spam, validation_class:LongType}, 
+        {column_name: uid, index_type: KEYS, index_name: uidIdx, validation_class: UTF8Type},
+        {column_name: domain, index_type: KEYS, index_name: domainIdx, validation_class: UTF8Type}
+        ];
+
 create column family messagesContent with memtable_throughput=64 
     and keys_cached = 0 and key_cache_save_period = 0;
     
-create column family messagesAttachment with memtable_throughput=64 and 
+create column family messagesAttachment with comparator=UTF8Type and memtable_throughput=64 and 
     keys_cached = 0 and key_cache_save_period = 0 
-    and column_metadata=[{ column_name: 0, validation_class:LongType}];
+    and column_metadata=[
+        {column_name: 0, validation_class:LongType}, 
+        {column_name: 1, validation_class: UTF8Type}
+        ];
     
 create column family lastInbox with comparator=TimeUUIDType and memtable_throughput=64 and 
     keys_cached = 0 and key_cache_save_period = 0;
-
-update column family  messagesMetaData with column_metadata=[{column_name: uid, index_type: KEYS, index_name: uidIdx, validation_class: UTF8Type},
- {column_name: domain, index_type: KEYS, index_name: domainIdx, validation_class: UTF8Type}];
- 
  
 """
 import StringIO
@@ -111,7 +115,7 @@ def writeMetaData(key, metaData, statData, attachments):
                                           'subject': subject, #UNICODE
                                           'scode' : code,
                                           'hDate': metaData[4],                                          
-                                          'time': statData[0],
+                                          'time': str(statData[0]),
                                           'size': statData[1],
                                           'spam': statData[2],
                                           'sender': statData[3],
@@ -154,7 +158,7 @@ def writeMetaData(key, metaData, statData, attachments):
                         )
     
         batch.insert(lastInbox, metaData[0], {time: key})
-           
+        
     batch.send()
 
 #
@@ -203,7 +207,7 @@ def writeContent(key, envelope, header, body):
 #
 # write attachment data in chunks
 # do de-duplication if data actually exist in DB    
-def writeAttachment(mHash, data):    
+def writeAttachment(mHash, fname, data):    
     #KB size
     dataSize = len(data) / 1024    
 
@@ -217,11 +221,12 @@ def writeAttachment(mHash, data):
         stat = 1
 
         messagesAttachment.insert(mHash, {'0': '1'})
+        messagesAttachment.insert(mHash, {'1': fname})
 
         if dataSize > 1024:
-            chunkWriter(mHash, data, messagesAttachment, 1)
+            chunkWriter(mHash, data, messagesAttachment, 2)
         else:
-            messagesAttachment.insert(mHash, {'1': data})
+            messagesAttachment.insert(mHash, {'2': data})
     
     if stat == 0:
         
@@ -356,14 +361,15 @@ def getAttachHash(key, numbAttchs):
 def getAttachData(key):
     
     columnsTotal = messagesAttachment.get_count(key)
-    parts = columnsTotal - 1
+    parts = columnsTotal - 2
    
     #att= {}
-    att = messagesAttachment.get(key, column_count=parts, column_start='1', column_finish='')
-    
+    att = messagesAttachment.get(key, column_count=parts, column_start='2', column_finish='')
+   
+    #print att 
     nAtt = []
     #join chunks of attachment data
-    for part in range(1, columnsTotal):
+    for part in range(2, columnsTotal):
         nAtt.append(att[str(part)])
 
     data = ''.join(nAtt)

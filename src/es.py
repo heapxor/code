@@ -5,6 +5,16 @@
 # Create index and index mapping
 #
 
+# CREATE the INDEX 
+"""
+curl -XPUT 'http://cvut4.centrum.cz:9200/archive/' -d '{
+   "settings" : {
+         "number_of_shards" : 10,
+         "number_of_replicas" : 2
+    }
+}'
+                                                        
+"""
 #################
 ###TODO: 
 ###
@@ -15,7 +25,7 @@
 
 import pyes
 from pyes import ES
-from eventlet import monkey_patch
+#from eventlet import monkey_patch
 
 #monkey_patch()
 
@@ -27,15 +37,7 @@ def get_conn():
     
     return iconn
 
-"""
-curl -XPUT 'http://cvut4.centrum.cz:9200/archive/' -d '{
-   "settings" : {
-         "number_of_shards" : 10,
-         "number_of_replicas" : 2
-    }
-}'
-                                                        
-"""
+
 class ESload():
     
     
@@ -55,7 +57,7 @@ class ESload():
             self.iconn.create_index(self._indexName)
                         
             #inbox shouldnt by analyzed -- but bug X-VF-Scanner-Rcpt-To, 'index': 'not_analyzed'
-            # - better analyze it for 'pretty' searching :)
+            # - better analyze it for 'pretty' deeper searching :)
             mappingsEmail = {
                                  
                             u'inbox': {'type': u'string'},

@@ -11,57 +11,80 @@ import cass
 import hashlib 
 from cass import emailCheck
 
+#format output message of email details
 def infoPrint(data):
-
-    print 'From: ' + data['from'] + '|' + 'Subject: ' + data['subject'] + '|' + 'Date: ' + data['eDate'] + '|' + 'Size: ' + data['size'] + '|' + 'Attch: ' + data['attachments'] 
-
-
-def dumpInbox():
     
-    print '?'
-
-# list all (35) messages per inbox  
-def listInbox(inbox):
+    if 'attachmnets' in data:
+	att = data['attachments']
+    else:
+	att = 0
     
-    size = 35
+    if 'from' in data:
+	hfrom = data['from']
+    else:
+	hfrom = 'empty'
 
-    inboxData = cass.getInbox(inbox, size)
+    if 'subject' in data:
+	subject = data['subject']
+    else:
+	subject = 'empty'
+
+    if 'hDate' in data:
+	date = data['hDate']
+    else:
+	date = 'empty'
+
+    if 'size' in data:
+	size = data['size']
+    else:
+	size = 0
+	#print data
+   
+    
+    print "From: %s | Subject: %s | Date: %s | Size: %d | Attchs: %d" % (hfrom, subject, date, size, att) 
+	
+#
+# list #numb messages from user inbox 
+def listInbox(inbox, numb):
+
+    inboxData = cass.getInbox(inbox, numb)
 
     #The key is email key (use it for email dump)
     for key, data in inboxData:
         infoPrint(data)
 
 
-# print last 20 emails from inbox
-def topEmails(key):
+#
+# print last #numb emails from inbox (sorted by Date from email header)
+#
+def topEmails(key, numb):
     
-    l = [] 
-
-    ret = cass.getTop(key, 20)
+    ret = cass.getTop(key, numb)
     
     if ret == None:
         print 'Inbox doesnt exist'
     else:
         for key in ret.itervalues():
-            ret = infoEmail(key)
-	    l.append(ret)
-	
-    return l 		
+            infoEmail(key)
+
 
 # basic information about email, useful for web email client (like a gmail)
 #
-# return From, Subject, Data, Size, #attachments
+# return From, Subject, Date, Size, #attachments
 def infoEmail(key):
 
     if emailCheck(key) == 0:
         print 'Email is not in the DB'
     else:
         data = cass.getEmailInfo(key)
-        #infoPrint(data)
-	return data
+        infoPrint(data)
  
 #
-# raw email
+# get raw email
+# 
+# ret:
+#     raw string
+
 def rawEmail(key):
 
     #is the email in DB?    
@@ -88,7 +111,7 @@ def main():
     
     arg = sys.argv[1]
     key = sys.argv[2]    
-    
+ 
     if arg == 'info':
         infoEmail(key)
         
@@ -96,11 +119,14 @@ def main():
         ret = rawEmail(key)
         # print raw email
         print ret,    
+
     elif arg == 'top':
-        topEmails(key)
+	numb = sys.argv[3]
+        topEmails(key, int(numb))
            
     elif arg == 'inbox':
-        listInbox(key)
+	numb = sys.argv[3]
+        listInbox(key, int(numb))
         
     else:
         print 'Error: client got bad input parameters'
